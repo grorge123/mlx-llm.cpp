@@ -1,0 +1,174 @@
+#pragma once
+#include "activations.h"
+#include "base.h"
+#include "embedding.h"
+#include "linear.h"
+#include "normalization.h"
+#include "positional_encoding.h"
+#include <mlx/array.h>
+#include <mlx/fast.h>
+#include <mlx/ops.h>
+#include <optional>
+#include <tuple>
+#include <unordered_map>
+#include <vector>
+
+namespace nn = mlx::core::nn;
+
+class RMSNorm : public nn::Module {
+  float Eps;
+
+public:
+  RMSNorm(int Dims, float Eps = 1e-5) : Eps(Eps) {
+    registerParameter("weight", mx::ones({Dims}));
+  }
+  mx::array forward(mx::array Input);
+};
+class Attention : public nn::Module {
+
+  int NHeads;
+  int NKVHeads;
+  bool NormQKProj;
+  double Scale;
+
+public:
+  Attention(int Dim, int NHeads, int NKVHeads,
+            std::optional<int> HeadDimPar = 0, bool RopeTraditional = false,
+            float RopeTheta = 1000,
+            std::optional<std::unordered_map<std::string, std::string>>
+                RopeScaling = {},
+            bool NormQKProj = false, float AttentionNormEps = 1e-6)
+      : NHeads(NHeads), NKVHeads(NKVHeads), NormQKProj(NormQKProj) {
+    int HeadDim;
+    if (HeadDimPar) {
+      HeadDim = *HeadDimPar;
+    } else {
+      HeadDim = Dim / NHeads;
+    }
+    Scale = pow(HeadDim, -0.5);
+    registerModule("q_proj", nn::Linear(Dim, NHeads * HeadDim, false));
+    registerModule("k_proj", nn::Linear(Dim, NKVHeads * HeadDim, false));
+    registerModule("v_proj", nn::Linear(Dim, NKVHeads * HeadDim, false));
+    registerModule("o_proj", nn::Linear(NHeads * HeadDim, Dim, false));
+
+    if (NormQKProj) {
+      registerModule("q_norm", RMSNorm(HeadDim, AttentionNormEps));
+      registerModule("k_norm", RMSNorm(HeadDim, AttentionNormEps));
+    }
+    float RopeScale;
+    if (RopeScaling && (*RopeScaling)["type"] == " nn::Linear") {
+      RopeScale = 1 / stof((*RopeScaling)["factor"]);
+    } else {
+      RopeScale = 1;
+    }
+
+    registerModule("rope",
+                   nn::RoPE(HeadDim, RopeTraditional, RopeTheta, RopeScale));
+  }
+  std::tuple<mx::array, std::tuple<mx::array, mx::array>>
+  forward(mx::array Input, std::optional<mx::array> Mask = {},
+          std::optional<std::tuple<mx::array, mx::array>> KVCache = {});
+};
+class MLP : public nn::Module {
+  bool Gemma;
+
+public:
+  MLP(int Dim, int HiddenDim, bool Gemma = false) : Gemma(Gemma) {
+    registerModule("gate_proj", nn::Linear(Dim, HiddenDim, false));
+    registerModule("down_proj", nn::Linear(HiddenDim, Dim, false));
+    registerModule("up_proj", nn::Linear(Dim, HiddenDim, false));
+  }
+  mx::array forward(mx::array Input);
+};
+class TransformerBlock : public nn::Module {
+public:
+  TransformerBlock(int Dim, int NHeads, int NKVHeads, int HiddenDim,
+                   float NormEps, std::optional<int> HeadDim = {},
+                   bool RopeTraditional = false, float RopeTheta = 1000,
+                   std::optional<std::unordered_map<std::string, std::string>>
+                       RopeScaling = {},
+                   bool NormQKProj = false, float AttentionNormEps = 1e-6,
+                   bool Gemma = false) {
+    registerModule("attention",
+                   Attention(Dim, NHeads, NKVHeads, HeadDim, RopeTraditional,
+                             RopeTheta, RopeScaling, NormQKProj,
+                             AttentionNormEps));
+    registerModule("mlp", MLP(Dim, HiddenDim, Gemma));
+    if (!Gemma) {
+      registerModule("attention_norm", nn::RMSNorm(Dim, NormEps));
+      registerModule("mlp_norm", nn::RMSNorm(Dim, NormEps));
+    } else {
+      registerModule("attention_norm", RMSNorm(Dim, NormEps));
+      registerModule("mlp_norm", RMSNorm(Dim, NormEps));
+    }
+  }
+  std::tuple<mx::array, std::tuple<mx::array, mx::array>>
+  forward(mx::array Input, std::optional<mx::array> Mask = {},
+          std::optional<std::tuple<mx::array, mx::array>> KVCachePar = {});
+};
+class Transformer : public nn::Module {
+  int Dim;
+  std::optional<std::vector<int>> HiddenDim;
+  int VocabSize;
+  int NLayers;
+  bool Gemma;
+  bool EmbedAsHead;
+  std::vector<TransformerBlock> Layers{};
+
+public:
+  Transformer(
+      int Dim, std::optional<std::vector<int>> HiddenDim, int VocabSize,
+      int NLayers, std::optional<std::vector<int>> NHeads,
+      std::optional<std::vector<int>> NKVHeads = {}, float NormEps = 1e-5,
+      std::optional<int> HeadDim = {}, bool RopeTraditional = false,
+      float RopeTheta = 1000,
+      std::optional<std::vector<std::unordered_map<std::string, std::string>>>
+          RopeScaling = {},
+      bool NormQKProj = false, float AttentionNormEps = 1e-6,
+      bool Gemma = false, bool EmbedAsHead = false)
+      : Dim(Dim), HiddenDim(HiddenDim), VocabSize(VocabSize), NLayers(NLayers),
+        Gemma(Gemma) {
+    if (VocabSize <= 0) {
+      throw std::invalid_argument("VocabSize must be greater than 0.");
+    }
+    EmbedAsHead = Gemma ? true : EmbedAsHead;
+    if (!NKVHeads) {
+      NKVHeads = NHeads;
+    }
+    registerModule("token_embed", nn::Embedding(VocabSize, Dim));
+    for (int Idx = 0; Idx < NLayers; Idx++) {
+      Layers.push_back(TransformerBlock(
+          Dim, (*NHeads)[Idx], (*NKVHeads)[Idx], (*HiddenDim)[Idx], NormEps,
+          HeadDim, RopeTraditional, RopeTheta, (*RopeScaling)[Idx], NormQKProj,
+          AttentionNormEps, Gemma));
+    }
+    registerLayer("layers", Layers);
+    if (!Gemma) {
+      registerModule("norm", nn::RMSNorm(Dim, NormEps));
+    } else {
+      registerModule("norm", RMSNorm(Dim, NormEps));
+    }
+    if (!EmbedAsHead) {
+      registerModule("head", nn::Linear(Dim, VocabSize, false));
+    }
+  }
+  std::tuple<mx::array,
+             std::optional<std::vector<std::tuple<mx::array, mx::array>>>>
+  embed(mx::array Input,
+        std::optional<std::vector<std::tuple<mx::array, mx::array>>>
+            KVCachePar = {},
+        bool Norm = false);
+  std::tuple<mx::array,
+             std::optional<std::vector<std::tuple<mx::array, mx::array>>>>
+  forward(mx::array Input,
+          std::optional<std::vector<std::tuple<mx::array, mx::array>>>
+              KVCachePar = {});
+  std::tuple<mx::array,
+             std::optional<std::vector<std::tuple<mx::array, mx::array>>>>
+  generate(mx::array Input, std::optional<float> Temp = 0.0);
+  std::tuple<mx::array,
+             std::optional<std::vector<std::tuple<mx::array, mx::array>>>>
+  nextGenerate(mx::array Y, std::optional<float> Temp = 0.0,
+               std::optional<std::vector<std::tuple<mx::array, mx::array>>>
+                   KVCachePar = {});
+};
