@@ -46,14 +46,14 @@ public:
       HeadDim = Dim / NHeads;
     }
     Scale = pow(HeadDim, -0.5);
-    registerModule("q_proj", nn::Linear(Dim, NHeads * HeadDim, false));
-    registerModule("k_proj", nn::Linear(Dim, NKVHeads * HeadDim, false));
-    registerModule("v_proj", nn::Linear(Dim, NKVHeads * HeadDim, false));
-    registerModule("o_proj", nn::Linear(NHeads * HeadDim, Dim, false));
+    registerModule("q_proj", new nn::Linear(Dim, NHeads * HeadDim, false));
+    registerModule("k_proj", new nn::Linear(Dim, NKVHeads * HeadDim, false));
+    registerModule("v_proj", new nn::Linear(Dim, NKVHeads * HeadDim, false));
+    registerModule("o_proj", new nn::Linear(NHeads * HeadDim, Dim, false));
 
     if (NormQKProj) {
-      registerModule("q_norm", RMSNorm(HeadDim, AttentionNormEps));
-      registerModule("k_norm", RMSNorm(HeadDim, AttentionNormEps));
+      registerModule("q_norm", new RMSNorm(HeadDim, AttentionNormEps));
+      registerModule("k_norm", new RMSNorm(HeadDim, AttentionNormEps));
     }
     float RopeScale;
     if (RopeScaling && (*RopeScaling)["type"] == "linear") {
@@ -63,7 +63,7 @@ public:
     }
 
     registerModule("rope",
-                   nn::RoPE(HeadDim, RopeTraditional, RopeTheta, RopeScale));
+                   new nn::RoPE(HeadDim, RopeTraditional, RopeTheta, RopeScale));
   }
   std::tuple<mx::array, std::tuple<mx::array, mx::array>>
   forward(mx::array Input, std::optional<mx::array> Mask = {},
@@ -74,9 +74,9 @@ class MLP : public nn::Module {
 
 public:
   MLP(int Dim, int HiddenDim, bool Gemma = false) : Gemma(Gemma) {
-    registerModule("gate_proj", nn::Linear(Dim, HiddenDim, false));
-    registerModule("down_proj", nn::Linear(HiddenDim, Dim, false));
-    registerModule("up_proj", nn::Linear(Dim, HiddenDim, false));
+    registerModule("gate_proj", new nn::Linear(Dim, HiddenDim, false));
+    registerModule("down_proj", new nn::Linear(HiddenDim, Dim, false));
+    registerModule("up_proj", new nn::Linear(Dim, HiddenDim, false));
   }
   mx::array forward(mx::array Input);
 };
@@ -90,16 +90,16 @@ public:
                    bool NormQKProj = false, float AttentionNormEps = 1e-6,
                    bool Gemma = false) {
     registerModule("attention",
-                   Attention(Dim, NHeads, NKVHeads, HeadDim, RopeTraditional,
+                   new Attention(Dim, NHeads, NKVHeads, HeadDim, RopeTraditional,
                              RopeTheta, RopeScaling, NormQKProj,
                              AttentionNormEps));
-    registerModule("mlp", MLP(Dim, HiddenDim, Gemma));
+    registerModule("mlp", new MLP(Dim, HiddenDim, Gemma));
     if (!Gemma) {
-      registerModule("attention_norm", nn::RMSNorm(Dim, NormEps));
-      registerModule("mlp_norm", nn::RMSNorm(Dim, NormEps));
+      registerModule("attention_norm", new nn::RMSNorm(Dim, NormEps));
+      registerModule("mlp_norm", new nn::RMSNorm(Dim, NormEps));
     } else {
-      registerModule("attention_norm", RMSNorm(Dim, NormEps));
-      registerModule("mlp_norm", RMSNorm(Dim, NormEps));
+      registerModule("attention_norm", new RMSNorm(Dim, NormEps));
+      registerModule("mlp_norm", new RMSNorm(Dim, NormEps));
     }
   }
   std::tuple<mx::array, std::tuple<mx::array, mx::array>>
@@ -113,7 +113,7 @@ class Transformer : public nn::Module {
   int NLayers;
   bool Gemma;
   bool EmbedAsHead;
-  std::vector<TransformerBlock> Layers{};
+  std::vector<TransformerBlock *> Layers{};
 
 public:
   Transformer(
@@ -135,7 +135,7 @@ public:
     if (!NKVHeads) {
       NKVHeads = NHeads;
     }
-    registerModule("token_embed", nn::Embedding(VocabSize, Dim));
+    registerModule("token_embed", new nn::Embedding(VocabSize, Dim));
     if(HiddenDim->size() == 1){
       while (HiddenDim->size() < NLayers){
         HiddenDim->emplace_back((*HiddenDim)[0]);
@@ -151,15 +151,15 @@ public:
         NKVHeads->emplace_back((*NKVHeads)[0]);
       }
     }
-
+    Layers.reserve(NLayers);
     for (int Idx = 0; Idx < NLayers; Idx++) {
       if(RopeScaling){
-        Layers.push_back(TransformerBlock(
+        Layers.push_back(new TransformerBlock(
             Dim, (*NHeads)[Idx], (*NKVHeads)[Idx], (*HiddenDim)[Idx], NormEps,
             HeadDim, RopeTraditional, RopeTheta, (*RopeScaling)[Idx], NormQKProj,
             AttentionNormEps, Gemma));
       }else{
-        Layers.push_back(TransformerBlock(
+        Layers.push_back(new TransformerBlock(
             Dim, (*NHeads)[Idx], (*NKVHeads)[Idx], (*HiddenDim)[Idx], NormEps,
             HeadDim, RopeTraditional, RopeTheta, {}, NormQKProj,
             AttentionNormEps, Gemma));
@@ -167,12 +167,12 @@ public:
     }
     registerLayer("layers", Layers);
     if (!Gemma) {
-      registerModule("norm", nn::RMSNorm(Dim, NormEps));
+      registerModule("norm", new nn::RMSNorm(Dim, NormEps));
     } else {
-      registerModule("norm", RMSNorm(Dim, NormEps));
+      registerModule("norm", new RMSNorm(Dim, NormEps));
     }
     if (!EmbedAsHead) {
-      registerModule("head", nn::Linear(Dim, VocabSize, false));
+      registerModule("head", new nn::Linear(Dim, VocabSize, false));
     }
   }
   std::tuple<mx::array,

@@ -10,6 +10,11 @@ namespace mx = mlx::core;
 namespace mlx::core::nn {
 class Module {
 public:
+  virtual ~Module(){
+    for(auto Module:Submodules){
+      delete Module.second;
+    }
+  }
   std::string Name;
   std::unordered_map<std::string, mx::array> Parameters{};
   std::unordered_map<std::string, Module *> Submodules{};
@@ -17,24 +22,24 @@ public:
 
   void update(std::unordered_map<std::string, mx::array> Parameters);
   void apply(std::string Key, mx::array Parameters);
-  template <typename T> void registerModule(std::string Name, T &&M) {
+  template <typename T> void registerModule(std::string ModuleName, T *M) {
     using DecayedT = std::decay_t<T>;
     if (!std::is_base_of<Module, DecayedT>::value) {
       throw std::invalid_argument("Invalid subModule.");
     }
 
-    if (Submodules.find(Name) == Submodules.end()) {
-      Submodules.insert({Name, &M});
-      Submodules.at(Name)->Name = Name;
+    if (Submodules.find(ModuleName) == Submodules.end()) {
+      Submodules.insert({ModuleName, M});
+      Submodules.at(ModuleName)->Name = ModuleName;
     }
   }
   template <typename T>
-  void registerLayer(std::string Name, std::vector<T> &Layers) {
+  void registerLayer(std::string ModuleName, std::vector<T *> &Layers) {
     if (!std::is_base_of<Module, T>::value) {
       throw std::invalid_argument("Invalid subModule.");
     }
     for (size_t Idx = 0; Idx < Layers.size(); Idx++) {
-      registerModule(Name + "." +std::to_string(Idx), Layers[Idx]);
+      registerModule(ModuleName + "." +std::to_string(Idx), Layers[Idx]);
     }
   }
 };

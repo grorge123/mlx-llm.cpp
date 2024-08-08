@@ -10,7 +10,6 @@
 std::unordered_map<std::string, mx::array>
 weightsToMlx(std::string WeightPath, mx::StreamOrDevice Device) {
   const std::filesystem::path Path(WeightPath);
-  std::cout << "TEST:" << std::filesystem::is_directory(Path) << std::endl;
   if (std::filesystem::is_directory(Path)) {
     std::unordered_map<std::string, mx::array> Loaded;
     for (const auto &Entry : std::filesystem::directory_iterator(Path)) {
@@ -53,7 +52,7 @@ llamaToMlxllm(std::string WeightPath, mx::StreamOrDevice Device) {
       if (find(SplitKey.begin(), SplitKey.end(), "self_attn") !=
           SplitKey.end()) {
         ModelWeights.insert({SplitKey[0] + "." + SplitKey[1] + ".attention." +
-                                 SplitKey[3] + SplitKey[4],
+                                 SplitKey[3] + "." + SplitKey[4],
                              v});
       } else if (find(SplitKey.begin(), SplitKey.end(), "mlp") !=
                  SplitKey.end()) {

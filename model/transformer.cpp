@@ -96,13 +96,13 @@ Transformer::embed(
   KVCache.reserve(Layers.size());
   if (KVCachePar) {
     for (size_t Idx = 0; Idx < Layers.size(); Idx++) {
-      auto Result = Layers[Idx].forward(H, Mask, (*KVCachePar)[Idx]);
+      auto Result = Layers[Idx]->forward(H, Mask, (*KVCachePar)[Idx]);
       H = get<0>(Result);
       KVCache[Idx] = get<1>(Result);
     }
   } else {
     for (size_t Idx = 0; Idx < Layers.size(); Idx++) {
-      auto Result = Layers[Idx].forward(H, Mask, {});
+      auto Result = Layers[Idx]->forward(H, Mask, {});
       H = get<0>(Result);
       KVCache[Idx] = get<1>(Result);
     }
