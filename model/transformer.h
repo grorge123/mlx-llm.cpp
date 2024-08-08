@@ -136,11 +136,34 @@ public:
       NKVHeads = NHeads;
     }
     registerModule("token_embed", nn::Embedding(VocabSize, Dim));
+    if(HiddenDim->size() == 1){
+      while (HiddenDim->size() < NLayers){
+        HiddenDim->emplace_back((*HiddenDim)[0]);
+      }
+    }
+    if(NHeads->size() == 1){
+      while (NHeads->size() < NLayers){
+        NHeads->emplace_back((*NHeads)[0]);
+      }
+    }
+    if(NKVHeads->size() == 1){
+      while (NKVHeads->size() < NLayers){
+        NKVHeads->emplace_back((*NKVHeads)[0]);
+      }
+    }
+
     for (int Idx = 0; Idx < NLayers; Idx++) {
-      Layers.push_back(TransformerBlock(
-          Dim, (*NHeads)[Idx], (*NKVHeads)[Idx], (*HiddenDim)[Idx], NormEps,
-          HeadDim, RopeTraditional, RopeTheta, (*RopeScaling)[Idx], NormQKProj,
-          AttentionNormEps, Gemma));
+      if(RopeScaling){
+        Layers.push_back(TransformerBlock(
+            Dim, (*NHeads)[Idx], (*NKVHeads)[Idx], (*HiddenDim)[Idx], NormEps,
+            HeadDim, RopeTraditional, RopeTheta, (*RopeScaling)[Idx], NormQKProj,
+            AttentionNormEps, Gemma));
+      }else{
+        Layers.push_back(TransformerBlock(
+            Dim, (*NHeads)[Idx], (*NKVHeads)[Idx], (*HiddenDim)[Idx], NormEps,
+            HeadDim, RopeTraditional, RopeTheta, {}, NormQKProj,
+            AttentionNormEps, Gemma));
+      }
     }
     registerLayer("layers", Layers);
     if (!Gemma) {

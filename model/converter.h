@@ -1,6 +1,7 @@
 #pragma once
 #include "base.h"
 #include "mlx/mlx.h"
+#include<cstring>
 
 #define replace(Str, From, To) Str.replace(Str.find(From), strlen(From), To)
 

@@ -18,7 +18,8 @@ public:
   void update(std::unordered_map<std::string, mx::array> Parameters);
   void apply(std::string Key, mx::array Parameters);
   template <typename T> void registerModule(std::string Name, T &&M) {
-    if (!std::is_base_of<T, Module>::value) {
+    using DecayedT = std::decay_t<T>;
+    if (!std::is_base_of<Module, DecayedT>::value) {
       throw std::invalid_argument("Invalid subModule.");
     }
 
@@ -29,11 +30,11 @@ public:
   }
   template <typename T>
   void registerLayer(std::string Name, std::vector<T> &Layers) {
-    if (!std::is_base_of<T, Module>::value) {
+    if (!std::is_base_of<Module, T>::value) {
       throw std::invalid_argument("Invalid subModule.");
     }
     for (size_t Idx = 0; Idx < Layers.size(); Idx++) {
-      registerModule(Name + std::to_string(Idx), Layers[Idx]);
+      registerModule(Name + "." +std::to_string(Idx), Layers[Idx]);
     }
   }
 };

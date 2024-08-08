@@ -10,6 +10,7 @@
 std::unordered_map<std::string, mx::array>
 weightsToMlx(std::string WeightPath, mx::StreamOrDevice Device) {
   const std::filesystem::path Path(WeightPath);
+  std::cout << "TEST:" << std::filesystem::is_directory(Path) << std::endl;
   if (std::filesystem::is_directory(Path)) {
     std::unordered_map<std::string, mx::array> Loaded;
     for (const auto &Entry : std::filesystem::directory_iterator(Path)) {
@@ -18,17 +19,17 @@ weightsToMlx(std::string WeightPath, mx::StreamOrDevice Device) {
         Loaded.insert(SubWeight.begin(), SubWeight.end());
       }
     }
-  } else {
-    if (WeightPath.ends_with(".safetensors")) {
-      std::cout << "Loading model from .safetensors file...\n";
-      const mx::SafetensorsLoad Loaded = load_safetensors(WeightPath, Device);
-      return Loaded.first;
-    }
-    if (WeightPath.ends_with(".gguf")) {
-      std::cout << "Loading model from .gguf file...\n";
-      const mx::GGUFLoad Loaded = load_gguf(WeightPath, Device);
-      return Loaded.first;
-    }
+    return Loaded;
+  }
+  if (WeightPath.ends_with(".safetensors")) {
+    std::cout << "Loading model from .safetensors file...\n";
+    const mx::SafetensorsLoad Loaded = load_safetensors(WeightPath, Device);
+    return Loaded.first;
+  }
+  if (WeightPath.ends_with(".gguf")) {
+    std::cout << "Loading model from .gguf file...\n";
+    const mx::GGUFLoad Loaded = load_gguf(WeightPath, Device);
+    return Loaded.first;
   }
   std::cout << "Can not regonize model file\n";
   throw std::invalid_argument("Invalid model path.");

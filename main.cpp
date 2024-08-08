@@ -14,6 +14,6 @@ int main() {
                            std::vector<int>{32}, std::vector<int>{32}, NormEps,
                            RopeTheta, RopeTraditional);
   std::cout << "Load Model...\n";
-  Model.update(llamaToMlxllm("../llama2", Device));
+  Model.update(llamaToMlxllm("../llama2-7b", Device));
   return 0;
 }
