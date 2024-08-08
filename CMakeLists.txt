@@ -15,7 +15,9 @@ find_package(MLX CONFIG REQUIRED)
 
 add_library(
   mlx_cpp
-  transformer.cpp
+  model/transformer.cpp
+  model/converter.cpp
+  model/utils.cpp
   mlx/base.cpp
   mlx/linear.cpp
   mlx/positional_encoding.cpp

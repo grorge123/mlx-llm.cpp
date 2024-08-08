@@ -56,7 +56,7 @@ public:
       registerModule("k_norm", RMSNorm(HeadDim, AttentionNormEps));
     }
     float RopeScale;
-    if (RopeScaling && (*RopeScaling)["type"] == " nn::Linear") {
+    if (RopeScaling && (*RopeScaling)["type"] == "linear") {
       RopeScale = 1 / stof((*RopeScaling)["factor"]);
     } else {
       RopeScale = 1;

@@ -1,4 +1,4 @@
-#include "mlx/transformer.h"
+#include "../mlx/transformer.h"
 #include "embedding.h"
 #include "linear.h"
 #include "transformer.h"
@@ -133,11 +133,16 @@ Transformer::forward(
 std::tuple<mx::array,
            std::optional<std::vector<std::tuple<mx::array, mx::array>>>>
 Transformer::generate(mx::array Input, std::optional<float> Temp) {
-  // Reshape Input to Input[None]
-  auto [Logits, KVCache] = forward(reshape(Input, {}));
-  const int N = Logits.shape()[0];
-  const int H = Logits.shape()[2];
-  Logits = reshape(Logits, {N, -1, H});
+  // Reshape Input to input[:, None]
+  std::vector<int> ReshapeDim = Input.shape();
+  ReshapeDim.insert(ReshapeDim.begin(), 1);
+  auto [Logits, KVCache] = forward(reshape(Input, ReshapeDim));
+  const int H = Logits.shape()[1] - 1;
+  // take logits[:, -1, :]
+  Logits = take(Logits, mx::array({H}), 1);
+  ReshapeDim = Logits.shape();
+  ReshapeDim.erase(ReshapeDim.begin()+1);
+  Logits = reshape(Logits, ReshapeDim);
   mx::array Y = {};
   if (Temp == 0) {
     Y = mx::argmax(Logits, -1);
@@ -152,7 +157,9 @@ Transformer::nextGenerate(
     mx::array Y, std::optional<float> Temp,
     std::optional<std::vector<std::tuple<mx::array, mx::array>>> KVCachePar) {
   // Reshape Y to y[:, None]
-  auto [Logits, KVCache] = forward(reshape(Y, {}), KVCachePar);
+  std::vector<int> ReshapeDim = Y.shape();
+  ReshapeDim.insert(ReshapeDim.begin() + 1, 1);
+  auto [Logits, KVCache] = forward(reshape(reshape(Y, ReshapeDim), {}), KVCachePar);
   Logits = squeeze(Logits, 1);
   mx::array NextY = {};
   if (Temp == 0) {
