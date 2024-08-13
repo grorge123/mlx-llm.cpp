@@ -43,5 +43,10 @@ add_library(gguflib STATIC ${gguflib_SOURCE_DIR}/fp16.c
 set_target_properties(gguflib PROPERTIES LINKER_LANGUAGE CXX)
 target_link_libraries(mlx_cpp PRIVATE gguflib)
 
+
 add_executable(main main.cpp)
 target_link_libraries(main PUBLIC mlx_cpp)
+
+add_subdirectory(tokenizer tokenizers EXCLUDE_FROM_ALL)
+target_include_directories(main PUBLIC ${CMAKE_SOURCE_DIR}/tokenizer/include)
+target_link_libraries(main PUBLIC tokenizers_cpp)
