@@ -50,3 +50,6 @@ target_link_libraries(main PUBLIC mlx_cpp)
 add_subdirectory(tokenizer tokenizers EXCLUDE_FROM_ALL)
 target_include_directories(main PUBLIC ${CMAKE_SOURCE_DIR}/tokenizer/include)
 target_link_libraries(main PUBLIC tokenizers_cpp)
+
+add_executable(test test/main.cpp)
+target_link_libraries(test PUBLIC mlx_cpp)

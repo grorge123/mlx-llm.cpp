@@ -32,17 +32,17 @@ Attention::forward(mx::array Input, std::optional<mx::array> Mask,
     Keys = dynamic_cast<RMSNorm *>(Submodules["k_norm"])->forward(Keys);
   }
 
-  if (!KVCache) {
+  if (KVCache) {
     const auto &[KeyCache, ValueCache] = *KVCache;
-    Queries = dynamic_cast<nn::RoPE *>(Submodules["nn::RoPE"])
+    Queries = dynamic_cast<nn::RoPE *>(Submodules["rope"])
                   ->forward(Queries, KeyCache.shape(2));
-    Keys = dynamic_cast<nn::RoPE *>(Submodules["nn::RoPE"])
+    Keys = dynamic_cast<nn::RoPE *>(Submodules["rope"])
                ->forward(Keys, KeyCache.shape(2));
     Keys = mx::concatenate({KeyCache, Keys}, 2);
     Values = mx::concatenate({KeyCache, Keys}, 2);
   } else {
-    Queries = dynamic_cast<nn::RoPE *>(Submodules["nn::RoPE"])->forward(Queries);
-    Keys = dynamic_cast<nn::RoPE *>(Submodules["nn::RoPE"])->forward(Keys);
+    Queries = dynamic_cast<nn::RoPE *>(Submodules["rope"])->forward(Queries);
+    Keys = dynamic_cast<nn::RoPE *>(Submodules["rope"])->forward(Keys);
   }
   mx::array Output = mx::fast::scaled_dot_product_attention(
       Queries, Keys, Values, Scale, Mask);
@@ -66,10 +66,17 @@ std::tuple<mx::array, std::tuple<mx::array, mx::array>>
 TransformerBlock::forward(
     mx::array Input, std::optional<mx::array> Mask,
     std::optional<std::tuple<mx::array, mx::array>> KVCachePar) {
+  mx::array NormOutput = {};
+  if(!Gemma){
+    NormOutput= dynamic_cast<nn::RMSNorm *>(Submodules["attention_norm"])
+                        ->forward(Input);
+  }else{
+    NormOutput= dynamic_cast<RMSNorm *>(Submodules["attention_norm"])
+                     ->forward(Input);
+  }
   auto [R, KVCache] =
       dynamic_cast<Attention *>(Submodules["attention"])
-          ->forward(dynamic_cast<RMSNorm *>(Submodules["attention_norm"])
-                        ->forward(Input),
+          ->forward(NormOutput,
                     Mask, KVCachePar);
   auto H = Input + R;
   R = dynamic_cast<MLP *>(Submodules["mlp"])
@@ -83,7 +90,7 @@ Transformer::embed(
     std::optional<std::vector<std::tuple<mx::array, mx::array>>> KVCachePar,
     bool Norm) {
   auto H =
-      dynamic_cast<mx::nn::Embedding *>(Submodules["embed"])->forward(Input);
+      dynamic_cast<mx::nn::Embedding *>(Submodules["token_embed"])->forward(Input);
   if (Gemma) {
     H = H * (pow(Dim, 0.5));
   }

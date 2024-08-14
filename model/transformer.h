@@ -81,6 +81,7 @@ public:
   mx::array forward(mx::array Input);
 };
 class TransformerBlock : public nn::Module {
+  bool Gemma;
 public:
   TransformerBlock(int Dim, int NHeads, int NKVHeads, int HiddenDim,
                    float NormEps, std::optional<int> HeadDim = {},
@@ -88,7 +89,7 @@ public:
                    std::optional<std::unordered_map<std::string, std::string>>
                        RopeScaling = {},
                    bool NormQKProj = false, float AttentionNormEps = 1e-6,
-                   bool Gemma = false) {
+                   bool Gemma = false):Gemma(Gemma) {
     registerModule("attention",
                    new Attention(Dim, NHeads, NKVHeads, HeadDim, RopeTraditional,
                              RopeTheta, RopeScaling, NormQKProj,

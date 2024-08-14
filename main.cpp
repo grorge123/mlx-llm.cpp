@@ -1,7 +1,6 @@
 #include "mlx/mlx.h"
 #include "model/converter.h"
 #include "model/transformer.h"
-#include <cassert>
 #include <chrono>
 #include <fstream>
 #include <iostream>
@@ -34,8 +33,10 @@ int main() {
   const std::vector<int> Ids = Tok->Encode(Prompt);
   const mx::array Token =
       mx::array(Ids.data(), {static_cast<int>(Ids.size())}, mx::int32);
-  // const mx::array Token = mx::array({{1,2,3},{3}});
-  std::cout << Token << std::endl;
+  for(auto i : Ids){
+    std::cout << i << " ";
+  }
+  std::cout << std::endl;
   const mx::StreamOrDevice Device =
       mx::metal::is_available() ? mx::Device::gpu : mx::Device::cpu;
   const int VocabSize = 32000;
@@ -49,16 +50,14 @@ int main() {
   std::cout << "Load Model...\n";
   Model.update(llamaToMlxllm("../llama2-7b", Device));
   std::cout << "Start generate...\n";
-  auto [Y, KVCache] = Model.generate(Token, 0.1);
   std::vector<int> TokenList;
   std::string Answer;
   int Skip = 0;
+  auto [Y, KVCache] = Model.generate(Token, 0.1);
   while (Answer.size() > MaxLen) {
-    auto [NY, NKVCache] = Model.nextGenerate(Y, 0.1, KVCache);
     if (Y.shape()[1] > 1) {
       break;
     }
-    Y = NY, NKVCache = KVCache;
     auto *Data = Y.data<int>();
     for (int Idx = 0; Idx < Y.size(); Idx++) {
       TokenList.emplace_back(Data[Idx]);
@@ -69,6 +68,8 @@ int main() {
     Answer += Tok->Decode(TokenList);
     std::cout << Answer.substr(Skip);
     Skip = Answer.size();
+    auto [NY, NKVCache] = Model.nextGenerate(Y, 0.1, KVCache);
+    Y = NY, NKVCache = KVCache;
   }
   return 0;
 }
