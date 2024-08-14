@@ -28,8 +28,9 @@ Attention::forward(mx::array Input, std::optional<mx::array> Mask,
   Values = transpose(reshape(Values, {B, L, NKVHeads, -1}), {0, 2, 1, 3});
 
   if (NormQKProj) {
-    Queries = dynamic_cast<RMSNorm *>(Submodules["q_norm"])->forward(Queries);
-    Keys = dynamic_cast<RMSNorm *>(Submodules["k_norm"])->forward(Keys);
+    Queries =
+        dynamic_cast<nn::RMSNorm *>(Submodules["q_norm"])->forward(Queries);
+    Keys = dynamic_cast<nn::RMSNorm *>(Submodules["k_norm"])->forward(Keys);
   }
 
   if (KVCache) {
@@ -54,7 +55,8 @@ mx::array MLP::forward(mx::array Input) {
   if (Gemma) {
     return dynamic_cast<nn::Linear *>(Submodules["down_proj"])
         ->forward(gelu(
-            dynamic_cast<nn::Linear *>(Submodules["gate_proj"])->forward(Input) *
+            dynamic_cast<nn::Linear *>(Submodules["gate_proj"])
+                ->forward(Input) *
             dynamic_cast<nn::Linear *>(Submodules["up_proj"])->forward(Input)));
   }
   return dynamic_cast<nn::Linear *>(Submodules["down_proj"])
@@ -67,20 +69,25 @@ TransformerBlock::forward(
     mx::array Input, std::optional<mx::array> Mask,
     std::optional<std::tuple<mx::array, mx::array>> KVCachePar) {
   mx::array NormOutput = {};
-  if(!Gemma){
-    NormOutput= dynamic_cast<nn::RMSNorm *>(Submodules["attention_norm"])
-                        ->forward(Input);
-  }else{
-    NormOutput= dynamic_cast<RMSNorm *>(Submodules["attention_norm"])
+  if (!Gemma) {
+    NormOutput = dynamic_cast<nn::RMSNorm *>(Submodules["attention_norm"])
                      ->forward(Input);
+  } else {
+    NormOutput =
+        dynamic_cast<RMSNorm *>(Submodules["attention_norm"])->forward(Input);
   }
-  auto [R, KVCache] =
-      dynamic_cast<Attention *>(Submodules["attention"])
-          ->forward(NormOutput,
-                    Mask, KVCachePar);
+  auto [R, KVCache] = dynamic_cast<Attention *>(Submodules["attention"])
+                          ->forward(NormOutput, Mask, KVCachePar);
   auto H = Input + R;
-  R = dynamic_cast<MLP *>(Submodules["mlp"])
-          ->forward(dynamic_cast<RMSNorm *>(Submodules["mlp_norm"])->forward(H));
+  if (!Gemma) {
+    R = dynamic_cast<MLP *>(Submodules["mlp"])
+            ->forward(dynamic_cast<nn::RMSNorm *>(Submodules["mlp_norm"])
+                          ->forward(H));
+  } else {
+    R = dynamic_cast<MLP *>(Submodules["mlp"])
+            ->forward(
+                dynamic_cast<RMSNorm *>(Submodules["mlp_norm"])->forward(H));
+  }
   return {H + R, KVCache};
 }
 std::tuple<mx::array,
@@ -89,8 +96,8 @@ Transformer::embed(
     mx::array Input,
     std::optional<std::vector<std::tuple<mx::array, mx::array>>> KVCachePar,
     bool Norm) {
-  auto H =
-      dynamic_cast<mx::nn::Embedding *>(Submodules["token_embed"])->forward(Input);
+  auto H = dynamic_cast<mx::nn::Embedding *>(Submodules["token_embed"])
+               ->forward(Input);
   if (Gemma) {
     H = H * (pow(Dim, 0.5));
   }
@@ -105,13 +112,13 @@ Transformer::embed(
     for (size_t Idx = 0; Idx < Layers.size(); Idx++) {
       auto Result = Layers[Idx]->forward(H, Mask, (*KVCachePar)[Idx]);
       H = get<0>(Result);
-      KVCache[Idx] = get<1>(Result);
+      KVCache.emplace_back(get<1>(Result));
     }
   } else {
     for (size_t Idx = 0; Idx < Layers.size(); Idx++) {
       auto Result = Layers[Idx]->forward(H, Mask, {});
       H = get<0>(Result);
-      KVCache[Idx] = get<1>(Result);
+      KVCache.emplace_back(get<1>(Result));
     }
   }
   if (Norm) {
@@ -148,7 +155,7 @@ Transformer::generate(mx::array Input, std::optional<float> Temp) {
   // take logits[:, -1, :]
   Logits = take(Logits, mx::array({H}), 1);
   ReshapeDim = Logits.shape();
-  ReshapeDim.erase(ReshapeDim.begin()+1);
+  ReshapeDim.erase(ReshapeDim.begin() + 1);
   Logits = reshape(Logits, ReshapeDim);
   mx::array Y = {};
   if (Temp == 0) {
@@ -166,7 +173,8 @@ Transformer::nextGenerate(
   // Reshape Y to y[:, None]
   std::vector<int> ReshapeDim = Y.shape();
   ReshapeDim.insert(ReshapeDim.begin() + 1, 1);
-  auto [Logits, KVCache] = forward(reshape(reshape(Y, ReshapeDim), {}), KVCachePar);
+  auto [Logits, KVCache] =
+      forward(reshape(reshape(Y, ReshapeDim), {}), KVCachePar);
   Logits = squeeze(Logits, 1);
   mx::array NextY = {};
   if (Temp == 0) {

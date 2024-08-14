@@ -52,8 +52,8 @@ public:
     registerModule("o_proj", new nn::Linear(NHeads * HeadDim, Dim, false));
 
     if (NormQKProj) {
-      registerModule("q_norm", new RMSNorm(HeadDim, AttentionNormEps));
-      registerModule("k_norm", new RMSNorm(HeadDim, AttentionNormEps));
+      registerModule("q_norm", new nn::RMSNorm(HeadDim, AttentionNormEps));
+      registerModule("k_norm", new nn::RMSNorm(HeadDim, AttentionNormEps));
     }
     float RopeScale;
     if (RopeScaling && (*RopeScaling)["type"] == "linear") {
@@ -126,9 +126,9 @@ public:
       std::optional<std::vector<std::unordered_map<std::string, std::string>>>
           RopeScaling = {},
       bool NormQKProj = false, float AttentionNormEps = 1e-6,
-      bool Gemma = false, bool EmbedAsHead = false)
+      bool Gemma = false, bool EmbedAsHeadPar = false)
       : Dim(Dim), HiddenDim(HiddenDim), VocabSize(VocabSize), NLayers(NLayers),
-        Gemma(Gemma) {
+        Gemma(Gemma), EmbedAsHead(EmbedAsHeadPar) {
     if (VocabSize <= 0) {
       throw std::invalid_argument("VocabSize must be greater than 0.");
     }
