@@ -12,9 +12,10 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(fmt)
 
 find_package(MLX CONFIG REQUIRED)
-
+SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -fsanitize=undefined -fsanitize=address -g")
 add_library(
   mlx_cpp
+  prompt/llama.cpp
   model/transformer.cpp
   model/converter.cpp
   model/utils.cpp

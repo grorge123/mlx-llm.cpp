@@ -44,3 +44,10 @@ public:
   }
 };
 } // namespace mlx::core::nn
+
+template <typename T> void printVec(std::vector<T> Ve) {
+  for (auto I : Ve) {
+    std::cout << I << " ";
+  }
+  std::cout<<std::endl;
+}
