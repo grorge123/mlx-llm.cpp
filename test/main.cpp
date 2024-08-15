@@ -11,8 +11,6 @@
 #include <vector>
 
 int main() {
-  const mx::StreamOrDevice Device =
-      mx::metal::is_available() ? mx::Device::gpu : mx::Device::cpu;
   // mx::array Input = mx::array({{1, 2, 3, 4, 5, 6}, {6}});
   // auto Linear = mx::nn::Linear(6, 12, false);
   // Linear.update(weightsToMlx("../test/linear.safetensors", Device));
@@ -39,7 +37,7 @@ int main() {
   auto Model =
       Transformer(32, std::vector<int>{64}, 1024, 3, std::vector<int>{6},
                   std::vector<int>{2}, 1e-5, {}, false, 10000);
-  Model.update(weightsToMlx("../test/test_model.safetensors", Device));
+  Model.update(weightsToMlx("../test/test_model.safetensors"));
   mx::array Input = mx::array({{1, 23, 35, 48, 87, 62}, {6}});
   std::cout << "Start Generate..." << std::endl;
   int MaxLen = 12;

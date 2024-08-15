@@ -6,7 +6,7 @@
 #define replace(Str, From, To) Str.replace(Str.find(From), strlen(From), To)
 
 std::unordered_map<std::string, mx::array>
-weightsToMlx(std::string WeightPath, mx::StreamOrDevice Device);
+weightsToMlx(std::string WeightPath);
 
 std::unordered_map<std::string, mx::array>
-llamaToMlxllm(std::string WeightPath, mx::StreamOrDevice Device);
+llamaToMlxllm(std::string WeightPath);

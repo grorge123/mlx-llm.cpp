@@ -37,8 +37,6 @@ int main() {
     std::cout << i << " ";
   }
   std::cout << std::endl;
-  const mx::StreamOrDevice Device =
-      mx::metal::is_available() ? mx::Device::gpu : mx::Device::cpu;
   const int VocabSize = 32000;
   const float NormEps = 1e-5;
   const float RopeTheta = 10000.0;
@@ -48,7 +46,7 @@ int main() {
                            std::vector<int>{32}, std::vector<int>{32}, NormEps,
                            RopeTheta, RopeTraditional);
   std::cout << "Load Model...\n";
-  Model.update(llamaToMlxllm("../llama2-7b", Device));
+  Model.update(llamaToMlxllm("../llama2-7b"));
   std::cout << "Start generate...\n";
   std::vector<int> TokenList;
   std::string Answer;

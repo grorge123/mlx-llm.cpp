@@ -8,13 +8,13 @@
 // StreamOrDevice Device = metal::is_available() ? Device::gpu : Device::cpu;
 
 std::unordered_map<std::string, mx::array>
-weightsToMlx(std::string WeightPath, mx::StreamOrDevice Device) {
+weightsToMlx(std::string WeightPath) {
   const std::filesystem::path Path(WeightPath);
   if (std::filesystem::is_directory(Path)) {
     std::unordered_map<std::string, mx::array> Loaded;
     for (const auto &Entry : std::filesystem::directory_iterator(Path)) {
       if (Entry.path().extension() == ".safetensors") {
-        auto SubWeight = weightsToMlx(Entry.path(), Device);
+        auto SubWeight = weightsToMlx(Entry.path());
         Loaded.insert(SubWeight.begin(), SubWeight.end());
       }
     }
@@ -22,12 +22,12 @@ weightsToMlx(std::string WeightPath, mx::StreamOrDevice Device) {
   }
   if (WeightPath.ends_with(".safetensors")) {
     std::cout << "Loading model from .safetensors file...\n";
-    const mx::SafetensorsLoad Loaded = load_safetensors(WeightPath, Device);
+    const mx::SafetensorsLoad Loaded = mx::load_safetensors(WeightPath);
     return Loaded.first;
   }
   if (WeightPath.ends_with(".gguf")) {
     std::cout << "Loading model from .gguf file...\n";
-    const mx::GGUFLoad Loaded = load_gguf(WeightPath, Device);
+    const mx::GGUFLoad Loaded = mx::load_gguf(WeightPath);
     return Loaded.first;
   }
   std::cout << "Can not regonize model file\n";
@@ -35,9 +35,9 @@ weightsToMlx(std::string WeightPath, mx::StreamOrDevice Device) {
 }
 
 std::unordered_map<std::string, mx::array>
-llamaToMlxllm(std::string WeightPath, mx::StreamOrDevice Device) {
+llamaToMlxllm(std::string WeightPath) {
   std::unordered_map<std::string, mx::array> ModelWeights;
-  auto Weight = weightsToMlx(WeightPath, Device);
+  auto Weight = weightsToMlx(WeightPath);
   for (auto &[k, v] : Weight) {
     std::string NewKey = k;
     if (NewKey.starts_with("model.")) {
