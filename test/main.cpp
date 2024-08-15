@@ -1,12 +1,14 @@
 #include "../mlx/linear.h"
 #include "../model/converter.h"
 #include "../model/transformer.h"
+#include "base.h"
 #include "mlx/mlx.h"
 #include <chrono>
 #include <fstream>
 #include <iostream>
 #include <mlx/array.h>
 #include <mlx/dtype.h>
+#include <vector>
 
 int main() {
   const mx::StreamOrDevice Device =
@@ -40,5 +42,16 @@ int main() {
   Model.update(weightsToMlx("../test/test_model.safetensors", Device));
   mx::array Input = mx::array({{1, 23, 35, 48, 87, 62}, {6}});
   std::cout << "Start Generate..." << std::endl;
-  Model.generate(Input);
+  int MaxLen = 12;
+  auto [Y, KVCache] = Model.generate(Input, 0);
+  std::vector<int> Answer;
+  while (MaxLen--) {
+    std::cout << Y << std::endl;
+    Answer.push_back(Y.data<int>()[0]);
+    auto [NY, NKVCache] = Model.nextGenerate(Y, 0, KVCache);
+
+    Y = NY, KVCache = NKVCache;
+  }
+  std::cout << "Answer:" << std::endl;
+  printVec(Answer);
 }

@@ -10,7 +10,8 @@ namespace mlx::core::nn {
 
 class Linear : public Module {
   bool EnableBias = true;
-  public:
+
+public:
   Linear(int InputDims, int OutputDims, bool EnableBias = true)
       : EnableBias(EnableBias) {
     const double Scale = std::sqrt(1.0 / InputDims);

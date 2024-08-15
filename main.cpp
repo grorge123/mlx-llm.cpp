@@ -54,8 +54,9 @@ int main() {
   std::string Answer;
   int Skip = 0;
   auto [Y, KVCache] = Model.generate(Token, 0.1);
-  while (Answer.size() > MaxLen) {
-    if (Y.shape()[1] > 1) {
+  while (Answer.size() < MaxLen) {
+    std::cout <<"Y:" << Y << std::endl;
+    if (Y.shape().size() != 1) {
       break;
     }
     auto *Data = Y.data<int>();
@@ -69,7 +70,7 @@ int main() {
     std::cout << Answer.substr(Skip);
     Skip = Answer.size();
     auto [NY, NKVCache] = Model.nextGenerate(Y, 0.1, KVCache);
-    Y = NY, NKVCache = KVCache;
+    Y = NY, KVCache = NKVCache;
   }
   return 0;
 }

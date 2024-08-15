@@ -1,8 +1,10 @@
 #include "../mlx/transformer.h"
+#include "base.h"
 #include "embedding.h"
 #include "linear.h"
 #include "transformer.h"
 #include <cstddef>
+#include <cstdio>
 #include <mlx/array.h>
 #include <mlx/ops.h>
 #include <mlx/random.h>
@@ -32,7 +34,6 @@ Attention::forward(mx::array Input, std::optional<mx::array> Mask,
         dynamic_cast<nn::RMSNorm *>(Submodules["q_norm"])->forward(Queries);
     Keys = dynamic_cast<nn::RMSNorm *>(Submodules["k_norm"])->forward(Keys);
   }
-
   if (KVCache) {
     const auto &[KeyCache, ValueCache] = *KVCache;
     Queries = dynamic_cast<nn::RoPE *>(Submodules["rope"])
@@ -40,7 +41,7 @@ Attention::forward(mx::array Input, std::optional<mx::array> Mask,
     Keys = dynamic_cast<nn::RoPE *>(Submodules["rope"])
                ->forward(Keys, KeyCache.shape(2));
     Keys = mx::concatenate({KeyCache, Keys}, 2);
-    Values = mx::concatenate({KeyCache, Keys}, 2);
+    Values = mx::concatenate({ValueCache, Values}, 2);
   } else {
     Queries = dynamic_cast<nn::RoPE *>(Submodules["rope"])->forward(Queries);
     Keys = dynamic_cast<nn::RoPE *>(Submodules["rope"])->forward(Keys);
@@ -56,13 +57,13 @@ mx::array MLP::forward(mx::array Input) {
     return dynamic_cast<nn::Linear *>(Submodules["down_proj"])
         ->forward(gelu(
             dynamic_cast<nn::Linear *>(Submodules["gate_proj"])
-                ->forward(Input) *
-            dynamic_cast<nn::Linear *>(Submodules["up_proj"])->forward(Input)));
+                ->forward(Input)) *
+            dynamic_cast<nn::Linear *>(Submodules["up_proj"])->forward(Input));
   }
   return dynamic_cast<nn::Linear *>(Submodules["down_proj"])
       ->forward(silu(
-          dynamic_cast<nn::Linear *>(Submodules["gate_proj"])->forward(Input) *
-          dynamic_cast<nn::Linear *>(Submodules["up_proj"])->forward(Input)));
+          dynamic_cast<nn::Linear *>(Submodules["gate_proj"])->forward(Input)) *
+          dynamic_cast<nn::Linear *>(Submodules["up_proj"])->forward(Input));
 }
 std::tuple<mx::array, std::tuple<mx::array, mx::array>>
 TransformerBlock::forward(
@@ -123,9 +124,9 @@ Transformer::embed(
   }
   if (Norm) {
     if (!Gemma) {
-      return {dynamic_cast<nn::RMSNorm *>(Submodules["norm"])->forward(H), {}};
+      return {dynamic_cast<nn::RMSNorm *>(Submodules["norm"])->forward(H), KVCache};
     }
-    return {dynamic_cast<RMSNorm *>(Submodules["norm"])->forward(H), {}};
+    return {dynamic_cast<RMSNorm *>(Submodules["norm"])->forward(H), KVCache};
   }
   return {H, KVCache};
 }
@@ -134,7 +135,7 @@ std::tuple<mx::array,
 Transformer::forward(
     mx::array Input,
     std::optional<std::vector<std::tuple<mx::array, mx::array>>> KVCachePar) {
-  auto [X, KVCache] = embed(Input, KVCachePar);
+  auto [X, KVCache] = embed(Input, KVCachePar, true);
   mx::array Out = {};
   if (EmbedAsHead) {
     Out = dynamic_cast<mx::nn::Embedding *>(Submodules["token_embed"])
@@ -174,7 +175,7 @@ Transformer::nextGenerate(
   std::vector<int> ReshapeDim = Y.shape();
   ReshapeDim.insert(ReshapeDim.begin() + 1, 1);
   auto [Logits, KVCache] =
-      forward(reshape(reshape(Y, ReshapeDim), {}), KVCachePar);
+      forward(reshape(Y, ReshapeDim), KVCachePar);
   Logits = squeeze(Logits, 1);
   mx::array NextY = {};
   if (Temp == 0) {
