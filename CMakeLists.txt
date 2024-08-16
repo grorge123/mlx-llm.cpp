@@ -19,6 +19,7 @@ add_library(
   model/transformer.cpp
   model/converter.cpp
   model/utils.cpp
+  model/registry.cpp
   mlx/base.cpp
   mlx/linear.cpp
   mlx/positional_encoding.cpp
