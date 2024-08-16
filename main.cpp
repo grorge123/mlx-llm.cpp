@@ -49,7 +49,7 @@ int main() {
   std::cout << mx::default_device() << " " << mx::metal::is_available()
             << std::endl;
   mx::set_default_device(mx::Device::gpu);
-  auto Tok = Tokenizer::FromBlobJSON(LoadBytesFromFile("../tokenizer.json"));
+  auto Tok = Tokenizer::FromBlobJSON(LoadBytesFromFile("../tokenizer_llama2.json"));
   const int MaxToken = 512;
   mx::array Token = mx::array({{1, 23, 35, 48, 87, 62}, {6}});
   std::cout << "Create Model...\n";
@@ -57,10 +57,10 @@ int main() {
   const float NormEps = 1e-5;
   const float RopeTheta = 10000.0;
   const bool RopeTraditional = false;
-  auto Model = llama38b();
+  auto Model = tinyLlama11BChatV10();
   std::cout << "Load Model...\n";
   // Model.update(llamaToMlxllm("../llama2-7b"));
-  Model.update(llamaToMlxllm("../llama3-8b"));
+  Model.update(llamaToMlxllm("../tiny"));
   std::cout << "Start generate...\n";
   const TinyLLaMAPrompt Prmopt;
   const std::vector<int> Ids = Tok->Encode("Where are you from?");
@@ -69,6 +69,7 @@ int main() {
   std::string Answer;
   int Skip = 0;
   int TokenCount = 0;
+  const auto Start{std::chrono::steady_clock::now()};
   auto [Y, KVCache] = Model.generate(Token, 0.1);
   while (true) {
     TokenCount++;
@@ -95,5 +96,8 @@ int main() {
     auto [NY, NKVCache] = Model.nextGenerate(Y, 0.1, KVCache);
     Y = NY, KVCache = NKVCache;
   }
+  const auto End{std::chrono::steady_clock::now()};
+  const std::chrono::duration<double> ElapsedSeconds{End - Start};
+  std::cout << "Elapsed time: " << ElapsedSeconds.count() << "s. " << "TPS: " << TokenList.size() / ElapsedSeconds.count() << std::endl;
   return 0;
 }
