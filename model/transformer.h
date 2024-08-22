@@ -62,8 +62,8 @@ public:
       RopeScale = 1;
     }
 
-    registerModule("rope",
-                   new nn::RoPE(HeadDim, RopeTraditional, RopeTheta, RopeScale));
+    registerModule(
+        "rope", new nn::RoPE(HeadDim, RopeTraditional, RopeTheta, RopeScale));
   }
   std::tuple<mx::array, std::tuple<mx::array, mx::array>>
   forward(mx::array Input, std::optional<mx::array> Mask = {},
@@ -82,6 +82,7 @@ public:
 };
 class TransformerBlock : public nn::Module {
   bool Gemma;
+
 public:
   TransformerBlock(int Dim, int NHeads, int NKVHeads, int HiddenDim,
                    float NormEps, std::optional<int> HeadDim = {},
@@ -89,11 +90,12 @@ public:
                    std::optional<std::unordered_map<std::string, std::string>>
                        RopeScaling = {},
                    bool NormQKProj = false, float AttentionNormEps = 1e-6,
-                   bool Gemma = false):Gemma(Gemma) {
+                   bool Gemma = false)
+      : Gemma(Gemma) {
     registerModule("attention",
-                   new Attention(Dim, NHeads, NKVHeads, HeadDim, RopeTraditional,
-                             RopeTheta, RopeScaling, NormQKProj,
-                             AttentionNormEps));
+                   new Attention(Dim, NHeads, NKVHeads, HeadDim,
+                                 RopeTraditional, RopeTheta, RopeScaling,
+                                 NormQKProj, AttentionNormEps));
     registerModule("mlp", new MLP(Dim, HiddenDim, Gemma));
     if (!Gemma) {
       registerModule("attention_norm", new nn::RMSNorm(Dim, NormEps));
@@ -110,8 +112,6 @@ public:
 class Transformer : public nn::Module {
   int Dim;
   std::optional<std::vector<int>> HiddenDim;
-  int VocabSize;
-  int NLayers;
   bool Gemma;
   bool EmbedAsHead;
   std::vector<TransformerBlock *> Layers{};
@@ -127,8 +127,8 @@ public:
           RopeScaling = {},
       bool NormQKProj = false, float AttentionNormEps = 1e-6,
       bool Gemma = false, bool EmbedAsHeadPar = false)
-      : Dim(Dim), HiddenDim(HiddenDim), VocabSize(VocabSize), NLayers(NLayers),
-        Gemma(Gemma), EmbedAsHead(EmbedAsHeadPar) {
+      : Dim(Dim), HiddenDim(HiddenDim), Gemma(Gemma),
+        EmbedAsHead(EmbedAsHeadPar) {
     if (VocabSize <= 0) {
       throw std::invalid_argument("VocabSize must be greater than 0.");
     }
@@ -137,29 +137,29 @@ public:
       NKVHeads = NHeads;
     }
     registerModule("token_embed", new nn::Embedding(VocabSize, Dim));
-    if(HiddenDim->size() == 1){
-      while (HiddenDim->size() < NLayers){
+    if (HiddenDim->size() == 1) {
+      while (static_cast<int>(HiddenDim->size()) < NLayers) {
         HiddenDim->emplace_back((*HiddenDim)[0]);
       }
     }
-    if(NHeads->size() == 1){
-      while (NHeads->size() < NLayers){
+    if (NHeads->size() == 1) {
+      while (static_cast<int>(NHeads->size()) < NLayers) {
         NHeads->emplace_back((*NHeads)[0]);
       }
     }
-    if(NKVHeads->size() == 1){
-      while (NKVHeads->size() < NLayers){
+    if (NKVHeads->size() == 1) {
+      while (static_cast<int>(NKVHeads->size()) < NLayers) {
         NKVHeads->emplace_back((*NKVHeads)[0]);
       }
     }
     Layers.reserve(NLayers);
     for (int Idx = 0; Idx < NLayers; Idx++) {
-      if(RopeScaling){
+      if (RopeScaling) {
         Layers.push_back(new TransformerBlock(
             Dim, (*NHeads)[Idx], (*NKVHeads)[Idx], (*HiddenDim)[Idx], NormEps,
-            HeadDim, RopeTraditional, RopeTheta, (*RopeScaling)[Idx], NormQKProj,
-            AttentionNormEps, Gemma));
-      }else{
+            HeadDim, RopeTraditional, RopeTheta, (*RopeScaling)[Idx],
+            NormQKProj, AttentionNormEps, Gemma));
+      } else {
         Layers.push_back(new TransformerBlock(
             Dim, (*NHeads)[Idx], (*NKVHeads)[Idx], (*HiddenDim)[Idx], NormEps,
             HeadDim, RopeTraditional, RopeTheta, {}, NormQKProj,

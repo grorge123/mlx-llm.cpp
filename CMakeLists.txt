@@ -12,7 +12,8 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(fmt)
 
 find_package(MLX CONFIG REQUIRED)
-SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -fsanitize=undefined -fsanitize=address -g")
+set(CMAKE_CXX_FLAGS
+    "${CMAKE_CXX_FLAGS} -fsanitize=undefined -fsanitize=address -g")
 add_library(
   mlx_cpp
   prompt/llama.cpp
@@ -27,6 +28,7 @@ add_library(
   mlx/embedding.cpp
   mlx/normalization.cpp
   mlx/transformer.cpp)
+target_compile_options(mlx_cpp PRIVATE -Wall -Wextra -Wpedantic -Werror)
 target_link_libraries(mlx_cpp PUBLIC mlx)
 target_include_directories(mlx_cpp PUBLIC ${CMAKE_SOURCE_DIR}/mlx)
 target_include_directories(mlx_cpp PUBLIC ${MLX_INCLUDE_DIRS})
@@ -44,7 +46,6 @@ add_library(gguflib STATIC ${gguflib_SOURCE_DIR}/fp16.c
                            ${gguflib_SOURCE_DIR}/gguflib.c)
 set_target_properties(gguflib PROPERTIES LINKER_LANGUAGE CXX)
 target_link_libraries(mlx_cpp PRIVATE gguflib)
-
 
 add_executable(main main.cpp)
 target_link_libraries(main PUBLIC mlx_cpp)

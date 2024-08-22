@@ -118,8 +118,8 @@ Transformer::embed(
     } else {
       Result = Layers[Idx]->forward(H, Mask, {});
     }
-    H = get<0>(Result);
-    KVCache.emplace_back(get<1>(Result));
+    H = std::get<0>(Result);
+    KVCache.emplace_back(std::get<1>(Result));
   }
   if (Norm) {
     if (!Gemma) {
