@@ -5,8 +5,6 @@
 #include <unordered_map>
 #include <vector>
 
-// StreamOrDevice Device = metal::is_available() ? Device::gpu : Device::cpu;
-
 std::unordered_map<std::string, mx::array>
 weightsToMlx(std::string WeightPath) {
   const std::filesystem::path Path(WeightPath);
@@ -20,12 +18,12 @@ weightsToMlx(std::string WeightPath) {
     }
     return Loaded;
   }
-  if (WeightPath.ends_with(".safetensors")) {
+  if (endsWith(WeightPath, ".safetensors")) {
     std::cout << "Loading model from .safetensors file...\n";
     const mx::SafetensorsLoad Loaded = mx::load_safetensors(WeightPath);
     return Loaded.first;
   }
-  if (WeightPath.ends_with(".gguf")) {
+  if (endsWith(WeightPath, ".gguf")) {
     std::cout << "Loading model from .gguf file...\n";
     const mx::GGUFLoad Loaded = mx::load_gguf(WeightPath);
     return Loaded.first;
@@ -40,7 +38,7 @@ llamaToMlxllm(std::string WeightPath) {
   auto Weight = weightsToMlx(WeightPath);
   for (auto &[k, v] : Weight) {
     std::string NewKey = k;
-    if (NewKey.starts_with("model.")) {
+    if (startsWith(NewKey, "model.")) {
       replace(NewKey, "model.", "");
     }
     std::vector<std::string> SplitKey = splitString(NewKey, '.');

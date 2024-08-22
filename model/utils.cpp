@@ -19,3 +19,14 @@ std::string joinString(std::vector<std::string> &S, char Delim) {
   }
   return Result;
 }
+
+bool endsWith(std::string const &Value, std::string const &Ending) {
+  if (Ending.size() > Value.size())
+    return false;
+  return std::equal(Ending.rbegin(), Ending.rend(), Value.rbegin());
+}
+bool startsWith(std::string const &Value, std::string const &Starting) {
+  if (Starting.size() > Value.size())
+    return false;
+  return std::equal(Starting.begin(), Starting.end(), Value.begin());
+}

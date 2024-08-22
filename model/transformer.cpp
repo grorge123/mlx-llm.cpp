@@ -55,14 +55,15 @@ Attention::forward(mx::array Input, std::optional<mx::array> Mask,
 mx::array MLP::forward(mx::array Input) {
   if (Gemma) {
     return dynamic_cast<nn::Linear *>(Submodules["down_proj"])
-        ->forward(gelu(
-            dynamic_cast<nn::Linear *>(Submodules["gate_proj"])
-                ->forward(Input)) *
+        ->forward(
+            gelu(dynamic_cast<nn::Linear *>(Submodules["gate_proj"])
+                     ->forward(Input)) *
             dynamic_cast<nn::Linear *>(Submodules["up_proj"])->forward(Input));
   }
   return dynamic_cast<nn::Linear *>(Submodules["down_proj"])
-      ->forward(silu(
-          dynamic_cast<nn::Linear *>(Submodules["gate_proj"])->forward(Input)) *
+      ->forward(
+          silu(dynamic_cast<nn::Linear *>(Submodules["gate_proj"])
+                   ->forward(Input)) *
           dynamic_cast<nn::Linear *>(Submodules["up_proj"])->forward(Input));
 }
 std::tuple<mx::array, std::tuple<mx::array, mx::array>>
@@ -97,8 +98,8 @@ Transformer::embed(
     mx::array Input,
     std::optional<std::vector<std::tuple<mx::array, mx::array>>> KVCachePar,
     bool Norm) {
-  auto H = dynamic_cast<mx::nn::Embedding *>(Submodules["token_embed"])
-               ->forward(Input);
+  mx::array H = dynamic_cast<mx::nn::Embedding *>(Submodules["token_embed"])
+                    ->forward(Input);
   if (Gemma) {
     H = H * (pow(Dim, 0.5));
   }
@@ -109,22 +110,21 @@ Transformer::embed(
   }
   std::vector<std::tuple<mx::array, mx::array>> KVCache;
   KVCache.reserve(Layers.size());
-  if (KVCachePar) {
-    for (size_t Idx = 0; Idx < Layers.size(); Idx++) {
-      auto Result = Layers[Idx]->forward(H, Mask, (*KVCachePar)[Idx]);
-      H = get<0>(Result);
-      KVCache.emplace_back(get<1>(Result));
+  for (size_t Idx = 0; Idx < Layers.size(); Idx++) {
+    std::tuple<mx::array, std::tuple<mx::array, mx::array>> Result = {{},
+                                                                      {{}, {}}};
+    if (KVCachePar) {
+      Result = Layers[Idx]->forward(H, Mask, (*KVCachePar)[Idx]);
+    } else {
+      Result = Layers[Idx]->forward(H, Mask, {});
     }
-  } else {
-    for (size_t Idx = 0; Idx < Layers.size(); Idx++) {
-      auto Result = Layers[Idx]->forward(H, Mask, {});
-      H = get<0>(Result);
-      KVCache.emplace_back(get<1>(Result));
-    }
+    H = get<0>(Result);
+    KVCache.emplace_back(get<1>(Result));
   }
   if (Norm) {
     if (!Gemma) {
-      return {dynamic_cast<nn::RMSNorm *>(Submodules["norm"])->forward(H), KVCache};
+      return {dynamic_cast<nn::RMSNorm *>(Submodules["norm"])->forward(H),
+              KVCache};
     }
     return {dynamic_cast<RMSNorm *>(Submodules["norm"])->forward(H), KVCache};
   }
@@ -174,8 +174,7 @@ Transformer::nextGenerate(
   // Reshape Y to y[:, None]
   std::vector<int> ReshapeDim = Y.shape();
   ReshapeDim.insert(ReshapeDim.begin() + 1, 1);
-  auto [Logits, KVCache] =
-      forward(reshape(Y, ReshapeDim), KVCachePar);
+  auto [Logits, KVCache] = forward(reshape(Y, ReshapeDim), KVCachePar);
   Logits = squeeze(Logits, 1);
   mx::array NextY = {};
   if (Temp == 0) {

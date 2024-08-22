@@ -4,6 +4,7 @@
 #include "model/registry.h"
 #include "model/transformer.h"
 #include "prompt/llama.h"
+#include "model/utils.h"
 #include <chrono>
 #include <fstream>
 #include <iostream>
@@ -35,11 +36,11 @@ enum AnserSataus {
   GO,
 };
 AnserSataus answerSataus(std::string Text, std::string End) {
-  if (Text.ends_with(End)) {
+  if (endsWith(Text, End)) {
     return STOP;
   }
   for (int Idx = 1; Idx < End.size(); Idx++) {
-    if (Text.ends_with(End.substr(0, Idx))) {
+    if (endsWith(Text, End.substr(0, Idx))) {
       return WAIT;
     }
   }
@@ -58,6 +59,7 @@ int main() {
   const float RopeTheta = 10000.0;
   const bool RopeTraditional = false;
   auto Model = tinyLlama11BChatV10();
+  // auto Model = llama27bChat();
   std::cout << "Load Model...\n";
   // Model.update(llamaToMlxllm("../llama2-7b"));
   Model.update(llamaToMlxllm("../tiny"));
