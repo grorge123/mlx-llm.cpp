@@ -3,8 +3,8 @@
 #include "model/converter.h"
 #include "model/registry.h"
 #include "model/transformer.h"
-#include "prompt/llama.h"
 #include "model/utils.h"
+#include "prompt/prompt.h"
 #include <chrono>
 #include <fstream>
 #include <iostream>
@@ -16,19 +16,19 @@
 #include <vector>
 using tokenizers::Tokenizer;
 
-std::string LoadBytesFromFile(const std::string &path) {
-  std::ifstream fs(path, std::ios::in | std::ios::binary);
-  if (fs.fail()) {
-    std::cerr << "Cannot open " << path << std::endl;
+std::string loadBytesFromFile(const std::string &Path) {
+  std::ifstream Fs(Path, std::ios::in | std::ios::binary);
+  if (Fs.fail()) {
+    std::cerr << "Cannot open " << Path << std::endl;
     exit(1);
   }
-  std::string data;
-  fs.seekg(0, std::ios::end);
-  size_t size = static_cast<size_t>(fs.tellg());
-  fs.seekg(0, std::ios::beg);
-  data.resize(size);
-  fs.read(data.data(), size);
-  return data;
+  std::string Data;
+  Fs.seekg(0, std::ios::end);
+  const size_t Size = static_cast<size_t>(Fs.tellg());
+  Fs.seekg(0, std::ios::beg);
+  Data.resize(Size);
+  Fs.read(Data.data(), Size);
+  return Data;
 }
 enum AnserSataus {
   STOP,
@@ -39,7 +39,7 @@ AnserSataus answerSataus(std::string Text, std::string End) {
   if (endsWith(Text, End)) {
     return STOP;
   }
-  for (int Idx = 1; Idx < End.size(); Idx++) {
+  for (int Idx = 1; static_cast<int>(End.size()); Idx++) {
     if (endsWith(Text, End.substr(0, Idx))) {
       return WAIT;
     }
@@ -50,19 +50,16 @@ int main() {
   std::cout << mx::default_device() << " " << mx::metal::is_available()
             << std::endl;
   mx::set_default_device(mx::Device::gpu);
-  auto Tok = Tokenizer::FromBlobJSON(LoadBytesFromFile("../tokenizer_llama2.json"));
+  auto Tok =
+      Tokenizer::FromBlobJSON(loadBytesFromFile("../tokenizer_llama2.json"));
   const int MaxToken = 512;
   mx::array Token = mx::array({{1, 23, 35, 48, 87, 62}, {6}});
   std::cout << "Create Model...\n";
-  const int VocabSize = 32000;
-  const float NormEps = 1e-5;
-  const float RopeTheta = 10000.0;
-  const bool RopeTraditional = false;
-  auto Model = tinyLlama11BChatV10();
+  auto *Model = tinyLlama11BChatV10();
   // auto Model = llama27bChat();
   std::cout << "Load Model...\n";
   // Model.update(llamaToMlxllm("../llama2-7b"));
-  Model.update(llamaToMlxllm("../tiny"));
+  Model->update(llamaToMlxllm("../tiny"));
   std::cout << "Start generate...\n";
   const TinyLLaMAPrompt Prmopt;
   const std::vector<int> Ids = Tok->Encode("Where are you from?");
@@ -72,7 +69,7 @@ int main() {
   int Skip = 0;
   int TokenCount = 0;
   const auto Start{std::chrono::steady_clock::now()};
-  auto [Y, KVCache] = Model.generate(Token, 0.1);
+  auto [Y, KVCache] = Model->generate(Token, 0.1);
   while (true) {
     TokenCount++;
     if (TokenCount > MaxToken) {
@@ -81,7 +78,7 @@ int main() {
     eval(Y);
     std::vector<int32_t> Tokens;
     auto *Data = Y.data<int32_t>();
-    for (int Idx = 0; Idx < Y.size(); Idx++) {
+    for (int Idx = 0; Idx < static_cast<int>(Y.size()); Idx++) {
       Tokens.emplace_back(Data[Idx]);
     }
     // TODO: break when the token is the eos_token_id
@@ -95,11 +92,13 @@ int main() {
       std::cout << Answer.substr(Skip) << std::flush;
       Skip = Answer.size();
     }
-    auto [NY, NKVCache] = Model.nextGenerate(Y, 0.1, KVCache);
+    auto [NY, NKVCache] = Model->nextGenerate(Y, 0.1, KVCache);
     Y = NY, KVCache = NKVCache;
   }
   const auto End{std::chrono::steady_clock::now()};
   const std::chrono::duration<double> ElapsedSeconds{End - Start};
-  std::cout << "Elapsed time: " << ElapsedSeconds.count() << "s. " << "TPS: " << TokenList.size() / ElapsedSeconds.count() << std::endl;
+  std::cout << "Elapsed time: " << ElapsedSeconds.count() << "s. "
+            << "TPS: " << TokenList.size() / ElapsedSeconds.count()
+            << std::endl;
   return 0;
 }

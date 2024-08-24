@@ -16,7 +16,7 @@ set(CMAKE_CXX_FLAGS
     "${CMAKE_CXX_FLAGS} -fsanitize=undefined -fsanitize=address -g")
 add_library(
   mlx_cpp
-  prompt/llama.cpp
+  prompt/prompt.cpp
   model/transformer.cpp
   model/converter.cpp
   model/utils.cpp
@@ -47,12 +47,11 @@ add_library(gguflib STATIC ${gguflib_SOURCE_DIR}/fp16.c
 set_target_properties(gguflib PROPERTIES LINKER_LANGUAGE CXX)
 target_link_libraries(mlx_cpp PRIVATE gguflib)
 
-add_executable(main main.cpp)
+add_executable(main example/main.cpp)
+target_include_directories(main PUBLIC ${CMAKE_SOURCE_DIR})
 target_link_libraries(main PUBLIC mlx_cpp)
+target_compile_options(main PRIVATE -Wall -Wextra -Wpedantic -Werror)
 
 add_subdirectory(tokenizer tokenizers EXCLUDE_FROM_ALL)
 target_include_directories(main PUBLIC ${CMAKE_SOURCE_DIR}/tokenizer/include)
 target_link_libraries(main PUBLIC tokenizers_cpp)
-
-add_executable(test test/main.cpp)
-target_link_libraries(test PUBLIC mlx_cpp)

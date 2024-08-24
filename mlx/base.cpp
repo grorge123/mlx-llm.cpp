@@ -16,8 +16,8 @@ void Module::update(std::unordered_map<std::string, mx::array> Parameters) {
 void Module::apply(std::string Key, mx::array Value) {
   std::vector<std::string> SplitKey = splitString(Key, '.');
   if (SplitKey.size() == 1) {
-    if(Parameters.find(Key) == Parameters.end()){
-      throw std::invalid_argument("Unsupport weight: " + Key);
+    if (Parameters.find(Key) == Parameters.end()) {
+      throw std::invalid_argument("Unsupported weight: " + Key);
     }
     this->Parameters.at(Key) = Value;
   } else {
@@ -27,8 +27,8 @@ void Module::apply(std::string Key, mx::array Value) {
       LayerName += "." + SplitKey[0];
       SplitKey.erase(SplitKey.begin());
     }
-    if(Submodules.find(LayerName) == Submodules.end()){
-      throw std::invalid_argument("Unsupport Tensor: " + LayerName);
+    if (Submodules.find(LayerName) == Submodules.end()) {
+      throw std::invalid_argument("Unsupported Tensor: " + LayerName);
     }
     Submodules.at(LayerName)->apply(joinString(SplitKey, '.'), Value);
   }

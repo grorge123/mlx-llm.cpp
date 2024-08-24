@@ -6,7 +6,8 @@
 namespace mlx::core::nn {
 class MultiHeadAttention : public Module {
   int NumHeads;
-  public:
+
+public:
   MultiHeadAttention(int Dims, int NumHeads,
                      std::optional<int> QueryInputDims = {},
                      std::optional<int> KeyInputDims = {},

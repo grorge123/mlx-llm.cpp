@@ -39,7 +39,7 @@ llamaToMlxllm(std::string WeightPath) {
   for (auto &[k, v] : Weight) {
     std::string NewKey = k;
     if (startsWith(NewKey, "model.")) {
-      replace(NewKey, "model.", "");
+      strReplace(NewKey, "model.", "");
     }
     std::vector<std::string> SplitKey = splitString(NewKey, '.');
     if (find(SplitKey.begin(), SplitKey.end(), "layers") != SplitKey.end()) {
@@ -69,7 +69,7 @@ llamaToMlxllm(std::string WeightPath) {
           {"embed_tokens", "token_embed"},
           {"lm_head", "head"},
           {"norm", "norm"}};
-        ModelWeights.insert({KeyMap.at(SplitKey[0]) + "." + SplitKey[1], v});
+      ModelWeights.insert({KeyMap.at(SplitKey[0]) + "." + SplitKey[1], v});
     }
   }
   return ModelWeights;

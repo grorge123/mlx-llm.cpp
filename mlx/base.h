@@ -10,8 +10,8 @@ namespace mx = mlx::core;
 namespace mlx::core::nn {
 class Module {
 public:
-  virtual ~Module(){
-    for(auto Module:Submodules){
+  virtual ~Module() {
+    for (auto Module : Submodules) {
       delete Module.second;
     }
   }
@@ -39,7 +39,7 @@ public:
       throw std::invalid_argument("Invalid subModule.");
     }
     for (size_t Idx = 0; Idx < Layers.size(); Idx++) {
-      registerModule(ModuleName + "." +std::to_string(Idx), Layers[Idx]);
+      registerModule(ModuleName + "." + std::to_string(Idx), Layers[Idx]);
     }
   }
 };
@@ -49,5 +49,5 @@ template <typename T> void printVec(std::vector<T> Ve) {
   for (auto I : Ve) {
     std::cout << I << " ";
   }
-  std::cout<<std::endl;
+  std::cout << std::endl;
 }
