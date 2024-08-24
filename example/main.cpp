@@ -51,7 +51,7 @@ int main() {
             << std::endl;
   mx::set_default_device(mx::Device::gpu);
   auto Tok =
-      Tokenizer::FromBlobJSON(loadBytesFromFile("../tokenizer_llama2.json"));
+      Tokenizer::FromBlobJSON(loadBytesFromFile("../tokenizer.json"));
   const int MaxToken = 512;
   mx::array Token = mx::array({{1, 23, 35, 48, 87, 62}, {6}});
   std::cout << "Create Model...\n";
