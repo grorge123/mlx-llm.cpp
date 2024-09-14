@@ -47,6 +47,17 @@ add_library(gguflib STATIC ${gguflib_SOURCE_DIR}/fp16.c
 set_target_properties(gguflib PROPERTIES LINKER_LANGUAGE CXX)
 target_link_libraries(mlx_cpp PRIVATE gguflib)
 
+find_package(spdlog NO_CMAKE_PACKAGE_REGISTRY QUIET)
+
+FetchContent_Declare(spdlog
+  GIT_REPOSITORY https://github.com/gabime/spdlog.git
+  GIT_TAG v1.3.1
+)
+FetchContent_MakeAvailable(spdlog)
+target_compile_options(spdlog INTERFACE -w)
+target_link_libraries(mlx_cpp PUBLIC spdlog)
+target_include_directories(mlx_cpp PUBLIC ${spdlog_INCLUDE_DIRS})
+
 add_executable(main example/main.cpp)
 target_include_directories(main PUBLIC ${CMAKE_SOURCE_DIR})
 target_link_libraries(main PUBLIC mlx_cpp)
