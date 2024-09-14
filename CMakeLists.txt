@@ -27,7 +27,8 @@ add_library(
   mlx/activations.cpp
   mlx/embedding.cpp
   mlx/normalization.cpp
-  mlx/transformer.cpp)
+  mlx/transformer.cpp
+  mlx/quantized.cpp)
 target_compile_options(mlx_cpp PRIVATE -Wall -Wextra -Wpedantic -Werror)
 target_link_libraries(mlx_cpp PUBLIC mlx)
 target_include_directories(mlx_cpp PUBLIC ${CMAKE_SOURCE_DIR}/mlx)

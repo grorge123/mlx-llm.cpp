@@ -14,6 +14,16 @@ void Module::update(std::unordered_map<std::string, mx::array> Parameters) {
     apply(k, v);
   }
 }
+nn::Module *Module::toQuantized(int GroupSize, int Bits) {
+  for (auto &[k, v] : Submodules) {
+    auto *OldModule = v;
+    v = v->toQuantized(GroupSize, Bits);
+    if (OldModule != v) {
+      delete OldModule;
+    }
+  }
+  return this;
+}
 void Module::apply(std::string Key, mx::array Value) {
   std::vector<std::string> SplitKey = splitString(Key, '.');
   if (SplitKey.size() == 1) {
@@ -34,13 +44,14 @@ void Module::apply(std::string Key, mx::array Value) {
     Submodules.at(LayerName)->apply(joinString(SplitKey, '.'), Value);
   }
 }
-std::unordered_map<std::string, mx::array> Module::getWeigts(const std::string& Prefix){
+std::unordered_map<std::string, mx::array>
+Module::getWeigts(const std::string &Prefix) {
   std::unordered_map<std::string, mx::array> Weights;
   for (auto &[k, v] : Submodules) {
     auto Subweights = v->getWeigts(Prefix + Name + ".");
     Weights.insert(Subweights.begin(), Subweights.end());
   }
-  for(auto &[k, v] : Parameters){
+  for (auto &[k, v] : Parameters) {
     Weights.insert({Prefix + Name + "." + k, v});
   }
   return Weights;

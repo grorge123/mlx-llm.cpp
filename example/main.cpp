@@ -50,8 +50,7 @@ int main() {
   std::cout << mx::default_device() << " " << mx::metal::is_available()
             << std::endl;
   mx::set_default_device(mx::Device::gpu);
-  auto Tok =
-      Tokenizer::FromBlobJSON(loadBytesFromFile("../tokenizer.json"));
+  auto Tok = Tokenizer::FromBlobJSON(loadBytesFromFile("../tokenizer.json"));
   const int MaxToken = 512;
   mx::array Token = mx::array({{1, 23, 35, 48, 87, 62}, {6}});
   std::cout << "Create Model...\n";
@@ -60,8 +59,9 @@ int main() {
   std::cout << "Load Model...\n";
   // Model.update(llamaToMlxllm("../llama2-7b"));
   Model->update(llamaToMlxllm("../tiny"));
-  // auto W = Model->getWeigts();
-  // saveWeights(W, "tiny.safetensors");
+  Model = dynamic_cast<Transformer *>(Model->toQuantized(64, 4));
+  auto W = Model->getWeigts();
+  saveWeights(W, "tiny.safetensors");
   std::cout << "Start generate...\n";
   const TinyLLaMAPrompt Prmopt;
   const std::vector<int> Ids = Tok->Encode("Where are you from?");
