@@ -4,6 +4,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <vector>
 namespace mx = mlx::core;
 
@@ -19,7 +20,7 @@ public:
   std::unordered_map<std::string, mx::array> Parameters{};
   std::unordered_map<std::string, Module *> Submodules{};
   mx::array &registerParameter(std::string Name, array &&W);
-
+  std::unordered_map<std::string, mx::array> getWeigts(const std::string& Prefix = "model");
   void update(std::unordered_map<std::string, mx::array> Parameters);
   void apply(std::string Key, mx::array Parameters);
   template <typename T> void registerModule(std::string ModuleName, T *M) {
@@ -31,6 +32,8 @@ public:
     if (Submodules.find(ModuleName) == Submodules.end()) {
       Submodules.insert({ModuleName, M});
       Submodules.at(ModuleName)->Name = ModuleName;
+    }else{
+      throw std::invalid_argument("Module already exists.");
     }
   }
   template <typename T>

@@ -1,6 +1,7 @@
 #include "base.h"
 #include "../model/utils.h"
 #include <mlx/array.h>
+#include <unordered_map>
 
 namespace mlx::core::nn {
 
@@ -32,5 +33,16 @@ void Module::apply(std::string Key, mx::array Value) {
     }
     Submodules.at(LayerName)->apply(joinString(SplitKey, '.'), Value);
   }
+}
+std::unordered_map<std::string, mx::array> Module::getWeigts(const std::string& Prefix){
+  std::unordered_map<std::string, mx::array> Weights;
+  for (auto &[k, v] : Submodules) {
+    auto Subweights = v->getWeigts(Prefix + Name + ".");
+    Weights.insert(Subweights.begin(), Subweights.end());
+  }
+  for(auto &[k, v] : Parameters){
+    Weights.insert({Prefix + Name + "." + k, v});
+  }
+  return Weights;
 }
 } // namespace mlx::core::nn

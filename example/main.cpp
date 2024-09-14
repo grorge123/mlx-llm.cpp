@@ -39,7 +39,7 @@ AnserSataus answerSataus(std::string Text, std::string End) {
   if (endsWith(Text, End)) {
     return STOP;
   }
-  for (int Idx = 1; static_cast<int>(End.size()); Idx++) {
+  for (int Idx = 1; Idx < static_cast<int>(End.size()); Idx++) {
     if (endsWith(Text, End.substr(0, Idx))) {
       return WAIT;
     }
@@ -60,6 +60,8 @@ int main() {
   std::cout << "Load Model...\n";
   // Model.update(llamaToMlxllm("../llama2-7b"));
   Model->update(llamaToMlxllm("../tiny"));
+  // auto W = Model->getWeigts();
+  // saveWeights(W, "tiny.safetensors");
   std::cout << "Start generate...\n";
   const TinyLLaMAPrompt Prmopt;
   const std::vector<int> Ids = Tok->Encode("Where are you from?");

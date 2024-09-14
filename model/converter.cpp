@@ -60,16 +60,24 @@ llamaToMlxllm(std::string WeightPath) {
         const std::unordered_map<std::string, std::string> KeyMap = {
             {"input_layernorm", "attention_norm"},
             {"post_attention_layernorm", "mlp_norm"}};
-        ModelWeights.insert({SplitKey[0] + "." + SplitKey[1] + "." +
-                                 KeyMap.at(SplitKey[2]) + "." + SplitKey[3],
-                             v});
+        if (KeyMap.find(SplitKey[2]) == KeyMap.end()) {
+          ModelWeights.insert({NewKey, v});
+        } else {
+          ModelWeights.insert({SplitKey[0] + "." + SplitKey[1] + "." +
+                                   KeyMap.at(SplitKey[2]) + "." + SplitKey[3],
+                               v});
+        }
       }
     } else {
       const std::unordered_map<std::string, std::string> KeyMap = {
           {"embed_tokens", "token_embed"},
           {"lm_head", "head"},
           {"norm", "norm"}};
-      ModelWeights.insert({KeyMap.at(SplitKey[0]) + "." + SplitKey[1], v});
+      if (KeyMap.find(SplitKey[0]) == KeyMap.end()) {
+        ModelWeights.insert({NewKey, v});
+      } else {
+        ModelWeights.insert({KeyMap.at(SplitKey[0]) + "." + SplitKey[1], v});
+      }
     }
   }
   return ModelWeights;
