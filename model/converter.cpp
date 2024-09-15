@@ -1,4 +1,5 @@
 #include "converter.h"
+#include "spdlog/spdlog.h"
 #include "utils.h"
 #include <filesystem>
 #include <string>
@@ -19,17 +20,17 @@ weightsToMlx(std::string WeightPath) {
     return Loaded;
   }
   if (endsWith(WeightPath, ".safetensors")) {
-    std::cout << "Loading model from .safetensors file...\n";
+    spdlog::info("Loading model from .safetensors file...\n");
     const mx::SafetensorsLoad Loaded = mx::load_safetensors(WeightPath);
     return Loaded.first;
   }
   if (endsWith(WeightPath, ".gguf")) {
-    std::cout << "Loading model from .gguf file...\n";
+    spdlog::info("Loading model from .gguf file...\n");
     const mx::GGUFLoad Loaded = mx::load_gguf(WeightPath);
     return Loaded.first;
   }
-  std::cout << "Can not regonize model file\n";
-  throw std::invalid_argument("Invalid model path.");
+  spdlog::error("Can not regonize model file\n");
+  assumingUnreachable();
 }
 
 std::unordered_map<std::string, mx::array>

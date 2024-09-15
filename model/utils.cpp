@@ -35,13 +35,15 @@ void saveWeights(const std::unordered_map<std::string, mx::array> &Weights,
   if (endsWith(Path, ".safetensors")) {
     mx::save_safetensors(Path, Weights, {{"format", "mlx"}});
   } else {
-    throw std::invalid_argument("Unsupported file format");
+    spdlog::error("Unsupported file format");
+    assumingUnreachable();
   }
 }
 void saveWeights(const mx::array &Weights, const std::string &Path) {
   if (endsWith(Path, ".npz")) {
     mx::save(Path, Weights);
   } else {
-    throw std::invalid_argument("Unsupported file format");
+    spdlog::error("Unsupported file format");
+    assumingUnreachable();
   }
 }

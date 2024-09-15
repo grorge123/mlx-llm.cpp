@@ -1,5 +1,6 @@
 #include "base.h"
 #include "../model/utils.h"
+#include "spdlog/spdlog.h"
 #include <mlx/array.h>
 #include <unordered_map>
 
@@ -28,7 +29,8 @@ void Module::apply(std::string Key, mx::array Value) {
   std::vector<std::string> SplitKey = splitString(Key, '.');
   if (SplitKey.size() == 1) {
     if (Parameters.find(Key) == Parameters.end()) {
-      throw std::invalid_argument("Unsupported weight: " + Key);
+      spdlog::error("Unsupported weight: {}", Key);
+      assumingUnreachable();
     }
     this->Parameters.at(Key) = Value;
   } else {
@@ -39,7 +41,8 @@ void Module::apply(std::string Key, mx::array Value) {
       SplitKey.erase(SplitKey.begin());
     }
     if (Submodules.find(LayerName) == Submodules.end()) {
-      throw std::invalid_argument("Unsupported Tensor: " + LayerName);
+      spdlog::error("Unsupported Layer: {}", LayerName);
+      assumingUnreachable();
     }
     Submodules.at(LayerName)->apply(joinString(SplitKey, '.'), Value);
   }
