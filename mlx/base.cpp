@@ -1,6 +1,7 @@
 #include "base.h"
 #include "../model/utils.h"
 #include "spdlog/spdlog.h"
+#include <memory>
 #include <mlx/array.h>
 #include <unordered_map>
 
@@ -15,15 +16,12 @@ void Module::update(std::unordered_map<std::string, mx::array> Parameters) {
     apply(K, V);
   }
 }
-nn::Module *Module::toQuantized(int GroupSize, int Bits) {
+std::shared_ptr<nn::Module> Module::toQuantized(int GroupSize, int Bits) {
   for (auto &[K, V] : Submodules) {
-    auto *OldModule = V;
+    const auto OldModule = V;
     V = V->toQuantized(GroupSize, Bits);
-    if (OldModule != V) {
-      delete OldModule;
-    }
   }
-  return this;
+  return shared_from_this();
 }
 void Module::apply(std::string Key, mx::array Value) {
   std::vector<std::string> SplitKey = splitString(Key, '.');
@@ -41,7 +39,7 @@ void Module::apply(std::string Key, mx::array Value) {
       SplitKey.erase(SplitKey.begin());
     }
     if (Submodules.find(LayerName) == Submodules.end()) {
-      spdlog::error("[WASI-NN] MLX backend: Unsupported Layer: {}", LayerName);
+      spdlog::error("Unsupported Layer: {}", LayerName);
       assumingUnreachable();
     }
     Submodules.at(LayerName)->apply(joinString(SplitKey, '.'), Value);

@@ -2,3 +2,6 @@ build/
 .cache/
 cmake-build-debug
 .idea
+*.safetensors
+*.gguf
+tokenizer*

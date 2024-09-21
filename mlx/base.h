@@ -11,23 +11,20 @@ namespace mx = mlx::core;
 #define assumingUnreachable() __builtin_unreachable()
 
 namespace mlx::core::nn {
-class Module {
+class Module : public std::enable_shared_from_this<Module> {
 public:
-  virtual ~Module() {
-    for (auto Module : Submodules) {
-      delete Module.second;
-    }
-  }
   std::string Name;
   std::unordered_map<std::string, mx::array> Parameters{};
-  std::unordered_map<std::string, Module *> Submodules{};
+  std::unordered_map<std::string, std::shared_ptr<Module>> Submodules{};
   mx::array &registerParameter(std::string Name, array &&W);
   std::unordered_map<std::string, mx::array>
   getWeigts(const std::string &Prefix = "model");
-  virtual nn::Module *toQuantized(int GroupSize = 64, int Bits = 4);
+  virtual std::shared_ptr<nn::Module> toQuantized(int GroupSize = 64,
+                                                  int Bits = 4);
   void update(std::unordered_map<std::string, mx::array> Parameters);
   void apply(std::string Key, mx::array Parameters);
-  template <typename T> void registerModule(std::string ModuleName, T *M) {
+  template <typename T>
+  void registerModule(std::string ModuleName, std::shared_ptr<T> M) {
     using DecayedT = std::decay_t<T>;
     if (!std::is_base_of<Module, DecayedT>::value) {
       spdlog::error("Invalid subModule.");
@@ -43,7 +40,8 @@ public:
     }
   }
   template <typename T>
-  void registerLayer(std::string ModuleName, std::vector<T *> &Layers) {
+  void registerLayer(std::string ModuleName,
+                     std::vector<std::shared_ptr<T>> &Layers) {
     if (!std::is_base_of<Module, T>::value) {
       spdlog::error("Invalid subModule.");
       assumingUnreachable();

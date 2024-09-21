@@ -34,10 +34,14 @@ public:
     if (!ValueOutputDims) {
       ValueOutputDims = Dims;
     }
-    registerModule("query_proj", new Linear(*QueryInputDims, Dims, Bias));
-    registerModule("key_proj", new Linear(*KeyInputDims, Dims, Bias));
-    registerModule("value_proj", new Linear(*ValueInputDims, *ValueDims, Bias));
-    registerModule("out_proj", new Linear(*ValueDims, *ValueOutputDims, Bias));
+    registerModule("query_proj", std::make_shared<Linear>(
+                                     Linear(*QueryInputDims, Dims, Bias)));
+    registerModule("key_proj",
+                   std::make_shared<Linear>(Linear(*KeyInputDims, Dims, Bias)));
+    registerModule("value_proj", std::make_shared<Linear>(Linear(
+                                     *ValueInputDims, *ValueDims, Bias)));
+    registerModule("out_proj", std::make_shared<Linear>(
+                                   Linear(*ValueDims, *ValueOutputDims, Bias)));
   };
   mx::array forward(mx::array Queries, mx::array Keys, mx::array Values,
                     mx::array Mask);

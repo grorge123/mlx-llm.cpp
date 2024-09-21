@@ -9,6 +9,7 @@
 #include <chrono>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <mlx/array.h>
 #include <mlx/device.h>
 #include <mlx/dtype.h>
@@ -56,12 +57,12 @@ int main() {
   const int MaxToken = 512;
   mx::array Token = mx::array({{1, 23, 35, 48, 87, 62}, {6}});
   spdlog::info("Create Model...");
-  auto *Model = llama38b();
+  auto Model = llama38b();
   // auto Model = llama27bChat();
   spdlog::info("Load Model...");
   // Model.update(llamaToMlxllm("../llama2-7b"));
   Model->update(llamaToMlxllm("../llama3-8b"));
-  Model = dynamic_cast<Transformer *>(Model->toQuantized(64, 4));
+  Model = std::dynamic_pointer_cast<Transformer>(Model->toQuantized(64, 4));
   // auto W = Model->getWeigts();
   // saveWeights(W, "tiny.safetensors");
   spdlog::info("Start generate...");

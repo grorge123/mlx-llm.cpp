@@ -1,5 +1,4 @@
 #include "converter.h"
-#include "spdlog/spdlog.h"
 #include "utils.h"
 #include <filesystem>
 #include <string>
