@@ -37,8 +37,8 @@ std::unordered_map<std::string, mx::array>
 llamaToMlxllm(std::string WeightPath) {
   std::unordered_map<std::string, mx::array> ModelWeights;
   auto Weight = weightsToMlx(WeightPath);
-  for (auto &[k, v] : Weight) {
-    std::string NewKey = k;
+  for (auto &[K, V] : Weight) {
+    std::string NewKey = K;
     if (startsWith(NewKey, "model.")) {
       strReplace(NewKey, "model.", "");
     }
@@ -52,21 +52,21 @@ llamaToMlxllm(std::string WeightPath) {
           SplitKey.end()) {
         ModelWeights.insert({SplitKey[0] + "." + SplitKey[1] + ".attention." +
                                  SplitKey[3] + "." + SplitKey[4],
-                             v});
+                             V});
       } else if (find(SplitKey.begin(), SplitKey.end(), "mlp") !=
                  SplitKey.end()) {
 
-        ModelWeights.insert({NewKey, v});
+        ModelWeights.insert({NewKey, V});
       } else {
         const std::unordered_map<std::string, std::string> KeyMap = {
             {"input_layernorm", "attention_norm"},
             {"post_attention_layernorm", "mlp_norm"}};
         if (KeyMap.find(SplitKey[2]) == KeyMap.end()) {
-          ModelWeights.insert({NewKey, v});
+          ModelWeights.insert({NewKey, V});
         } else {
           ModelWeights.insert({SplitKey[0] + "." + SplitKey[1] + "." +
                                    KeyMap.at(SplitKey[2]) + "." + SplitKey[3],
-                               v});
+                               V});
         }
       }
     } else {
@@ -75,9 +75,9 @@ llamaToMlxllm(std::string WeightPath) {
           {"lm_head", "head"},
           {"norm", "norm"}};
       if (KeyMap.find(SplitKey[0]) == KeyMap.end()) {
-        ModelWeights.insert({NewKey, v});
+        ModelWeights.insert({NewKey, V});
       } else {
-        ModelWeights.insert({KeyMap.at(SplitKey[0]) + "." + SplitKey[1], v});
+        ModelWeights.insert({KeyMap.at(SplitKey[0]) + "." + SplitKey[1], V});
       }
     }
   }

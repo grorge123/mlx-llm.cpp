@@ -6,20 +6,20 @@
 
 namespace mlx::core::nn {
 
-mx::array &Module::registerParameter(std::string Name, array &&W) {
+mx::array &Module::registerParameter(std::string Name, mx::array &&W) {
   Parameters.insert({Name, W});
   return Parameters.at(Name);
 }
 void Module::update(std::unordered_map<std::string, mx::array> Parameters) {
-  for (auto &[k, v] : Parameters) {
-    apply(k, v);
+  for (auto &[K, V] : Parameters) {
+    apply(K, V);
   }
 }
 nn::Module *Module::toQuantized(int GroupSize, int Bits) {
-  for (auto &[k, v] : Submodules) {
-    auto *OldModule = v;
-    v = v->toQuantized(GroupSize, Bits);
-    if (OldModule != v) {
+  for (auto &[K, V] : Submodules) {
+    auto *OldModule = V;
+    V = V->toQuantized(GroupSize, Bits);
+    if (OldModule != V) {
       delete OldModule;
     }
   }
@@ -41,7 +41,7 @@ void Module::apply(std::string Key, mx::array Value) {
       SplitKey.erase(SplitKey.begin());
     }
     if (Submodules.find(LayerName) == Submodules.end()) {
-      spdlog::error("Unsupported Layer: {}", LayerName);
+      spdlog::error("[WASI-NN] MLX backend: Unsupported Layer: {}", LayerName);
       assumingUnreachable();
     }
     Submodules.at(LayerName)->apply(joinString(SplitKey, '.'), Value);
@@ -50,12 +50,12 @@ void Module::apply(std::string Key, mx::array Value) {
 std::unordered_map<std::string, mx::array>
 Module::getWeigts(const std::string &Prefix) {
   std::unordered_map<std::string, mx::array> Weights;
-  for (auto &[k, v] : Submodules) {
-    auto Subweights = v->getWeigts(Prefix + Name + ".");
+  for (auto &[K, V] : Submodules) {
+    auto Subweights = V->getWeigts(Prefix + Name + ".");
     Weights.insert(Subweights.begin(), Subweights.end());
   }
-  for (auto &[k, v] : Parameters) {
-    Weights.insert({Prefix + Name + "." + k, v});
+  for (auto &[K, V] : Parameters) {
+    Weights.insert({Prefix + Name + "." + K, V});
   }
   return Weights;
 }

@@ -51,20 +51,21 @@ int main() {
   spdlog::debug("Device: {}, Metal avaiuable: {}.",
                 (mx::default_device() == mx::Device::cpu ? "CPU" : "GPU"),
                 mx::metal::is_available());
-  auto Tok = Tokenizer::FromBlobJSON(loadBytesFromFile("../tokenizer.json"));
+  auto Tok =
+      Tokenizer::FromBlobJSON(loadBytesFromFile("../tokenizer_llama3.json"));
   const int MaxToken = 512;
   mx::array Token = mx::array({{1, 23, 35, 48, 87, 62}, {6}});
   spdlog::info("Create Model...");
-  auto *Model = tinyLlama11BChatV10();
+  auto *Model = llama38b();
   // auto Model = llama27bChat();
   spdlog::info("Load Model...");
   // Model.update(llamaToMlxllm("../llama2-7b"));
-  Model->update(llamaToMlxllm("../tiny"));
+  Model->update(llamaToMlxllm("../llama3-8b"));
   Model = dynamic_cast<Transformer *>(Model->toQuantized(64, 4));
-  auto W = Model->getWeigts();
-  saveWeights(W, "tiny.safetensors");
+  // auto W = Model->getWeigts();
+  // saveWeights(W, "tiny.safetensors");
   spdlog::info("Start generate...");
-  const TinyLLaMAPrompt Prmopt;
+  const LLaMA3Prompt Prmopt;
   const std::vector<int> Ids = Tok->Encode("Where are you from?");
   Token = mx::array(Ids.data(), {static_cast<int>(Ids.size())}, mx::int32);
   std::vector<int32_t> TokenList;
