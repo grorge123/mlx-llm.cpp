@@ -46,7 +46,7 @@ public:
     registerParameter("scales", std::move(std::get<1>(Quantized)));
     registerParameter("biases", std::move(std::get<2>(Quantized)));
     if (Bias) {
-      registerParameter("bias", mx::zeros({OutputDim}));
+      registerParameter("biases", mx::zeros({OutputDim}));
     }
   }
   mx::array forward(mx::array Input) override;
