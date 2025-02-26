@@ -17,10 +17,10 @@ set(CMAKE_CXX_FLAGS
 add_library(
   mlx_cpp
   prompt/prompt.cpp
-  model/transformer.cpp
+  model/llm/transformer.cpp
+  model/llm/registry.cpp
   model/converter.cpp
   model/utils.cpp
-  model/registry.cpp
   mlx/base.cpp
   mlx/linear.cpp
   mlx/positional_encoding.cpp
