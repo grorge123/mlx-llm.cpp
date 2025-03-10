@@ -19,6 +19,8 @@ add_library(
   prompt/prompt.cpp
   model/llm/transformer.cpp
   model/llm/registry.cpp
+  model/mlllama/language.cpp
+  model/mlllama/mlllama_base.cpp
   model/converter.cpp
   model/utils.cpp
   mlx/base.cpp
