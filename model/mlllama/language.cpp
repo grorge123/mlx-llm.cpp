@@ -7,6 +7,78 @@
 #include <mlx/array.h>
 #include <stdexcept>
 
+TextConfig TextConfig::fromDict(const simdjson::dom::object &Obj) {
+  TextConfig Config;
+  auto SResult = Obj["model_type"].get_string();
+  if (!SResult.error()) {
+    Config.ModelType = std::string(SResult.value());
+  }
+  auto IResult = Obj["vocab_size"].get_int64();
+  if (!IResult.error()) {
+    Config.VocabSize = static_cast<int>(IResult.value());
+  }
+  IResult = Obj["hidden_size"].get_int64();
+  if (!IResult.error()) {
+    Config.HiddenSize = static_cast<int>(IResult.value());
+  }
+  IResult = Obj["intermediate_size"].get_int64();
+  if (!IResult.error()) {
+    Config.IntermediateSize = static_cast<int>(IResult.value());
+  }
+  IResult = Obj["num_hidden_layers"].get_int64();
+  if (!IResult.error()) {
+    Config.NumHiddenLayers = static_cast<int>(IResult.value());
+  }
+  IResult = Obj["num_attention_heads"].get_int64();
+  if (!IResult.error()) {
+    Config.NumAttentionHeads = static_cast<int>(IResult.value());
+  }
+  IResult = Obj["num_key_value_heads"].get_int64();
+  if (!IResult.error()) {
+    Config.NumKeyValueHeads = static_cast<int>(IResult.value());
+  }
+  SResult = Obj["hidden_act"].get_string();
+  if (!SResult.error()) {
+    Config.HiddenAct = std::string(SResult.value());
+  }
+  IResult = Obj["max_position_embeddings"].get_int64();
+  if (!IResult.error()) {
+    Config.MaxPositionEmbeddings = static_cast<int>(IResult.value());
+  }
+  auto DResult = Obj["initializer_range"].get_double();
+  if (!DResult.error()) {
+    Config.InitializerRange = static_cast<float>(DResult.value());
+  }
+  DResult = Obj["rms_norm_eps"].get_double();
+  if (!DResult.error()) {
+    Config.RmsNormEps = static_cast<float>(DResult.value());
+  }
+  auto BResult = Obj["tie_word_embeddings"].get_bool();
+  if (!BResult.error()) {
+    Config.TieWordEmbeddings = BResult.value();
+  }
+  DResult = Obj["rope_theta"].get_double();
+  if (!DResult.error()) {
+    Config.RopeTheta = static_cast<float>(DResult.value());
+  }
+  BResult = Obj["rope_traditional"].get_bool();
+  if (!BResult.error()) {
+    Config.RopeTraditional = BResult.value();
+  }
+  simdjson::dom::array Layers;
+  if (Obj["cross_attention_layers"].get_array().get(Layers) ==
+      simdjson::SUCCESS) {
+    Config.CrossAttentionLayers.clear();
+    for (auto Layer : Layers) {
+      auto ILayer = Layer.get_int64();
+      if (!ILayer.error()) {
+        Config.CrossAttentionLayers.push_back(static_cast<int>(ILayer.value()));
+      }
+    }
+  }
+  return Config;
+}
+
 MllamaTextCrossAttention::MllamaTextCrossAttention(const TextConfig &Config,
                                                    std::optional<int> LayerIdx)
     : Config(Config), HiddenSize(Config.HiddenSize),
@@ -336,7 +408,6 @@ mx::array MllamaTextModel::forward(
   return HiddenStates;
 }
 
-// ─────────── LanguageModel ───────────
 LanguageModel::LanguageModel(const TextConfig &Config)
     : Config(Config), Model(std::make_unique<MllamaTextModel>(Config)) {
   registerModule("lm_head", std::make_shared<nn::Linear>(nn::Linear(
@@ -361,18 +432,19 @@ LanguageModel::forward(const std::optional<mx::array> &InputIds,
   return Output;
 }
 
-// std::unordered_map<std::string, mx::array> LanguageModel::sanitize(
-//     const std::unordered_map<std::string, mx::array> &Weights) {
-//   std::unordered_map<std::string, mx::array> Sanitized;
-//   for (const auto &Pair : Weights) {
-//     if (Pair.first.find("self_attn.rotary_emb.inv_freq") == std::string::npos) {
-//       Sanitized[Pair.first] = Pair.second;
-//     }
-//   }
-//   return Sanitized;
-// }
+std::unordered_map<std::string, mx::array> LanguageModel::sanitize(
+    const std::unordered_map<std::string, mx::array> &Weights) {
+  std::unordered_map<std::string, mx::array> Sanitized;
+  for (const auto &Pair : Weights) {
+    if (Pair.first.find("self_attn.rotary_emb.inv_freq") == std::string::npos) {
+      Sanitized.insert({Pair.first, Pair.second});
+    }
+  }
+  return Sanitized;
+}
 
-// const std::vector<std::unique_ptr<nn::Module>> &LanguageModel::layers() const {
+// const std::vector<std::unique_ptr<nn::Module>> &LanguageModel::layers() const
+// {
 //   return Model->getLayers();
 // }
 

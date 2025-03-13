@@ -12,8 +12,8 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(fmt)
 
 find_package(MLX CONFIG REQUIRED)
-set(CMAKE_CXX_FLAGS
-    "${CMAKE_CXX_FLAGS} -fsanitize=undefined -fsanitize=address -g")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=undefined
+# -fsanitize=address -g")
 add_library(
   mlx_cpp
   prompt/prompt.cpp
@@ -21,10 +21,13 @@ add_library(
   model/llm/registry.cpp
   model/mlllama/language.cpp
   model/mlllama/mlllama_base.cpp
+  model/mlllama/vision.cpp
+  model/mlllama/mllama.cpp
   model/converter.cpp
   model/utils.cpp
   mlx/base.cpp
   mlx/linear.cpp
+  mlx/convolution.cpp
   mlx/positional_encoding.cpp
   mlx/activations.cpp
   mlx/embedding.cpp
@@ -52,10 +55,10 @@ target_link_libraries(mlx_cpp PRIVATE gguflib)
 
 find_package(spdlog NO_CMAKE_PACKAGE_REGISTRY QUIET)
 
-FetchContent_Declare(spdlog
+FetchContent_Declare(
+  spdlog
   GIT_REPOSITORY https://github.com/gabime/spdlog.git
-  GIT_TAG v1.3.1
-)
+  GIT_TAG v1.3.1)
 FetchContent_MakeAvailable(spdlog)
 target_compile_options(spdlog INTERFACE -w)
 target_link_libraries(mlx_cpp PUBLIC spdlog)
@@ -69,3 +72,17 @@ target_compile_options(main PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_subdirectory(tokenizer tokenizers EXCLUDE_FROM_ALL)
 target_include_directories(main PUBLIC ${CMAKE_SOURCE_DIR}/tokenizer/include)
 target_link_libraries(main PUBLIC tokenizers_cpp)
+
+find_package(simdjson QUIET)
+FetchContent_Declare(
+  simdjson
+  GIT_REPOSITORY https://github.com/simdjson/simdjson.git
+  GIT_TAG tags/v3.10.0
+  GIT_SHALLOW TRUE)
+set(SIMDJSON_DEVELOPER_MODE
+    OFF
+    CACHE BOOL "SIMDJSON developer mode" FORCE)
+FetchContent_MakeAvailable(simdjson)
+set_property(TARGET simdjson PROPERTY POSITION_INDEPENDENT_CODE ON)
+message(STATUS "Downloading SIMDJSON source -- done")
+target_link_libraries(mlx_cpp PRIVATE simdjson::simdjson)

@@ -5,10 +5,11 @@
 #include <vector>
 
 #include "base.h"
-#include "mlllama_base.h"
 #include "linear.h"
+#include "mlllama_base.h"
 #include "normalization.h"
 #include "positional_encoding.h"
+#include "simdjson.h"
 namespace nn = mlx::core::nn;
 
 mx::array createAttentionMask(const mx::array &HiddenStates);
@@ -31,6 +32,7 @@ struct TextConfig {
   std::vector<int> CrossAttentionLayers = {3, 8, 13, 18, 23, 28, 33, 38};
 
   TextConfig() = default;
+  static TextConfig fromDict(const simdjson::dom::object &Obj);
 };
 
 class MllamaTextCrossAttention : public nn::Module {
@@ -160,8 +162,8 @@ public:
       const std::optional<mx::array> &InputsEmbeds = std::nullopt,
       std::vector<vlm::KVCache *> *Cache = nullptr);
 
-  // static std::unordered_map<std::string, mx::array>
-  // sanitize(const std::unordered_map<std::string, mx::array> &Weights);
+  static std::unordered_map<std::string, mx::array>
+  sanitize(const std::unordered_map<std::string, mx::array> &Weights);
 
   // const std::vector<std::unique_ptr<nn::Module>> &layers() const;
   int headDim() const;
