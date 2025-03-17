@@ -19,12 +19,12 @@ add_library(
   prompt/prompt.cpp
   model/llm/transformer.cpp
   model/llm/registry.cpp
-  model/mlllama/language.cpp
-  model/mlllama/mlllama_base.cpp
-  model/mlllama/vision.cpp
-  model/mlllama/mllama.cpp
+  model/mllama/language.cpp
+  model/mllama/vision.cpp
+  model/mllama/mllama.cpp
   model/converter.cpp
   model/utils.cpp
+  model/vlm_base.cpp
   mlx/base.cpp
   mlx/linear.cpp
   mlx/convolution.cpp
@@ -39,6 +39,20 @@ target_link_libraries(mlx_cpp PUBLIC mlx)
 target_include_directories(mlx_cpp PUBLIC ${CMAKE_SOURCE_DIR}/mlx)
 target_include_directories(mlx_cpp PUBLIC ${MLX_INCLUDE_DIRS})
 target_link_libraries(mlx_cpp PUBLIC ${MLX_LIBRARIES})
+
+find_package(simdjson QUIET)
+FetchContent_Declare(
+  simdjson
+  GIT_REPOSITORY https://github.com/simdjson/simdjson.git
+  GIT_TAG tags/v3.10.0
+  GIT_SHALLOW TRUE)
+set(SIMDJSON_DEVELOPER_MODE
+    OFF
+    CACHE BOOL "SIMDJSON developer mode" FORCE)
+FetchContent_MakeAvailable(simdjson)
+set_property(TARGET simdjson PROPERTY POSITION_INDEPENDENT_CODE ON)
+message(STATUS "Downloading SIMDJSON source -- done")
+target_link_libraries(mlx_cpp PUBLIC simdjson::simdjson)
 
 message(STATUS "Downloading gguflib")
 FetchContent_Declare(
@@ -64,25 +78,16 @@ target_compile_options(spdlog INTERFACE -w)
 target_link_libraries(mlx_cpp PUBLIC spdlog)
 target_include_directories(mlx_cpp PUBLIC ${spdlog_INCLUDE_DIRS})
 
-add_executable(main example/main.cpp)
-target_include_directories(main PUBLIC ${CMAKE_SOURCE_DIR})
-target_link_libraries(main PUBLIC mlx_cpp)
-target_compile_options(main PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_executable(vlm example/vlm.cpp)
+target_include_directories(vlm PUBLIC ${CMAKE_SOURCE_DIR})
+target_link_libraries(vlm PUBLIC mlx_cpp)
+target_compile_options(vlm PRIVATE -Wall -Wextra -Wpedantic -Werror)
+
+add_executable(llm example/llm.cpp)
+target_include_directories(llm PUBLIC ${CMAKE_SOURCE_DIR})
+target_link_libraries(llm PUBLIC mlx_cpp)
+target_compile_options(llm PRIVATE -Wall -Wextra -Wpedantic -Werror)
 
 add_subdirectory(tokenizer tokenizers EXCLUDE_FROM_ALL)
-target_include_directories(main PUBLIC ${CMAKE_SOURCE_DIR}/tokenizer/include)
-target_link_libraries(main PUBLIC tokenizers_cpp)
-
-find_package(simdjson QUIET)
-FetchContent_Declare(
-  simdjson
-  GIT_REPOSITORY https://github.com/simdjson/simdjson.git
-  GIT_TAG tags/v3.10.0
-  GIT_SHALLOW TRUE)
-set(SIMDJSON_DEVELOPER_MODE
-    OFF
-    CACHE BOOL "SIMDJSON developer mode" FORCE)
-FetchContent_MakeAvailable(simdjson)
-set_property(TARGET simdjson PROPERTY POSITION_INDEPENDENT_CODE ON)
-message(STATUS "Downloading SIMDJSON source -- done")
-target_link_libraries(mlx_cpp PRIVATE simdjson::simdjson)
+target_include_directories(llm PUBLIC ${CMAKE_SOURCE_DIR}/tokenizer/include)
+target_link_libraries(llm PUBLIC tokenizers_cpp)

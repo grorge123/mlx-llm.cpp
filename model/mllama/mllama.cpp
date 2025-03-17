@@ -11,6 +11,7 @@
 #include <vector>
 
 namespace fs = std::filesystem;
+namespace mllama {
 
 ModelConfig ModelConfig::fromDict(const simdjson::dom::object &Obj) {
   ModelConfig Config;
@@ -164,3 +165,4 @@ Model Model::fromPretrained(const std::string &PathOrHfRepo) {
   Model.update(Weights);
   return Model;
 }
+} // namespace mllama

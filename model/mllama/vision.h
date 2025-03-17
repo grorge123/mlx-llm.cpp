@@ -1,10 +1,10 @@
 #pragma once
 
+#include "../vlm_base.h"
 #include "base.h"
 #include "convolution.h"
 #include "embedding.h"
 #include "linear.h"
-#include "mlllama_base.h"
 #include "normalization.h"
 #include "positional_encoding.h"
 #include "simdjson.h"
@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include <vector>
 namespace nn = mlx::core::nn;
+namespace mllama {
 
 struct VisionConfig {
   int ImageSize = 560;
@@ -144,3 +145,4 @@ private:
 
 mx::array _prepareAspectRatioAttentionMask(const mx::array &AspectRatioMask,
                                            int NumPatches, int TargetLength);
+} // namespace mllama

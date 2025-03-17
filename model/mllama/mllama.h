@@ -2,12 +2,13 @@
 
 #include "base.h"
 #include "language.h"
-#include "mlllama_base.h"
-#include "vision.h"
+#include "../vlm_base.h"
 #include "simdjson.h"
+#include "vision.h"
 
 namespace nn = mlx::core::nn;
 
+namespace mllama {
 struct ModelConfig {
   TextConfig TextConfig;
   VisionConfig VisionConfig;
@@ -39,3 +40,4 @@ protected:
 public:
   ModelConfig Config;
 };
+} // namespace mllama

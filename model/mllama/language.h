@@ -6,13 +6,13 @@
 
 #include "base.h"
 #include "linear.h"
-#include "mlllama_base.h"
+#include "../vlm_base.h"
 #include "normalization.h"
 #include "positional_encoding.h"
-#include "simdjson.h"
-namespace nn = mlx::core::nn;
+#include <simdjson.h>
 
-mx::array createAttentionMask(const mx::array &HiddenStates);
+namespace nn = mlx::core::nn;
+namespace mllama {
 
 struct TextConfig {
   std::string ModelType = "mllama";
@@ -173,3 +173,5 @@ private:
   TextConfig Config;
   std::unique_ptr<MllamaTextModel> Model;
 };
+
+} // namespace mllama

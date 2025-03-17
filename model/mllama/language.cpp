@@ -6,6 +6,7 @@
 #include <memory>
 #include <mlx/array.h>
 #include <stdexcept>
+namespace mllama {
 
 TextConfig TextConfig::fromDict(const simdjson::dom::object &Obj) {
   TextConfig Config;
@@ -382,7 +383,7 @@ mx::array MllamaTextModel::forward(
   // }
 
   mx::array HiddenStates = InputsEmbedsLocal;
-  mx::array MaskLocal = createAttentionMask(HiddenStates);
+  mx::array MaskLocal = vlm::createAttentionMask(HiddenStates);
 
   for (size_t Idx = 0; Idx < Layers.size(); ++Idx) {
     vlm::KVCache *LayerCache =
@@ -453,3 +454,5 @@ int LanguageModel::headDim() const {
 }
 
 int LanguageModel::nKvHeads() const { return Config.NumKeyValueHeads; }
+
+} // namespace mllama

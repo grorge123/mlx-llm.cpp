@@ -4,6 +4,8 @@
 #include <mlx/array.h>
 #include <mlx/ops.h>
 
+namespace mllama {
+
 VisionConfig VisionConfig::fromDict(const simdjson::dom::object &Obj) {
   VisionConfig Config;
   auto Result = Obj["image_size"].get_int64();
@@ -480,3 +482,4 @@ std::unordered_map<std::string, mx::array> VisionModel::sanitize(
   }
   return SanitizedWeights;
 }
+} // namespace mlllama
