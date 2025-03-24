@@ -2,6 +2,14 @@ cmake_minimum_required(VERSION 3.27)
 project(mlx_cpp LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+if(APPLE)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+endif()
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=undefined
+# -fsanitize=address -g")
 
 include(FetchContent)
 
@@ -10,10 +18,7 @@ FetchContent_Declare(
   GIT_REPOSITORY https://github.com/fmtlib/fmt
   GIT_TAG e69e5f977d458f2650bb346dadf2ad30c5320281)
 FetchContent_MakeAvailable(fmt)
-
 find_package(MLX CONFIG REQUIRED)
-# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=undefined
-# -fsanitize=address -g")
 add_library(
   mlx_cpp
   prompt/prompt.cpp
@@ -22,6 +27,9 @@ add_library(
   model/mllama/language.cpp
   model/mllama/vision.cpp
   model/mllama/mllama.cpp
+  model/gemma3/language.cpp
+  model/gemma3/vision.cpp
+  model/gemma3/gemma3.cpp
   model/converter.cpp
   model/utils.cpp
   model/vlm_base.cpp
@@ -33,6 +41,7 @@ add_library(
   mlx/embedding.cpp
   mlx/normalization.cpp
   mlx/transformer.cpp
+  mlx/pooling.cpp
   mlx/quantized.cpp)
 target_compile_options(mlx_cpp PRIVATE -Wall -Wextra -Wpedantic -Werror)
 target_link_libraries(mlx_cpp PUBLIC mlx)
@@ -40,7 +49,21 @@ target_include_directories(mlx_cpp PUBLIC ${CMAKE_SOURCE_DIR}/mlx)
 target_include_directories(mlx_cpp PUBLIC ${MLX_INCLUDE_DIRS})
 target_link_libraries(mlx_cpp PUBLIC ${MLX_LIBRARIES})
 
-find_package(simdjson QUIET)
+target_compile_options(
+  mlx_cpp
+  PRIVATE -Wall
+          -Wextra
+          -Wpedantic
+          -Werror
+          -fsanitize=undefined
+          -fsanitize=address
+          -g)
+
+target_link_options(mlx_cpp PRIVATE -fsanitize=undefined -fsanitize=address)
+
+target_link_libraries(mlx_cpp PRIVATE "-fsanitize=address"
+                                      "-fsanitize=undefined")
+
 FetchContent_Declare(
   simdjson
   GIT_REPOSITORY https://github.com/simdjson/simdjson.git
