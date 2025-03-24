@@ -1,8 +1,8 @@
 #pragma once
 
+#include "../vlm_base.h"
 #include "base.h"
 #include "language.h"
-#include "../vlm_base.h"
 #include "simdjson.h"
 #include "vision.h"
 
@@ -30,7 +30,9 @@ public:
           const std::optional<mx::array> &AspectRatioIds = std::nullopt,
           const std::optional<mx::array> &AspectRatioMask = std::nullopt,
           const std::optional<mx::array> &CrossAttentionMask = std::nullopt);
-  static Model fromPretrained(const std::string &PathOrHfRepo);
+  static std::shared_ptr<Model>
+  fromPretrained(const std::string &PathOrHfRepo,
+                 std::pair<int, int> Quantized = {});
 
 protected:
   std::pair<mx::array, mx::array>

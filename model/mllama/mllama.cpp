@@ -133,7 +133,8 @@ Model::prepareCrossAttentionMask(const mx::array &CrossAttentionMask,
   return {CrossAttnMask, FullTextRowMaskedOutMask};
 }
 
-Model Model::fromPretrained(const std::string &PathOrHfRepo) {
+std::shared_ptr<Model> Model::fromPretrained(const std::string &PathOrHfRepo,
+                                             std::pair<int, int> Quantized) {
   fs::path Path(PathOrHfRepo);
   simdjson::dom::parser Parser;
   simdjson::dom::element Doc;
@@ -147,7 +148,11 @@ Model Model::fromPretrained(const std::string &PathOrHfRepo) {
   ModelConfig.VisionConfig =
       VisionConfig::fromDict(Obj["vision_config"].get_object().value());
   ModelConfig.TextConfig = TextConfig::fromDict(Obj.value());
-  Model Model(ModelConfig);
+  auto Model = std::make_shared<mllama::Model>(mllama::Model(ModelConfig));
+  if (Quantized.first != 0 && Quantized.second != 0) {
+    Model = std::dynamic_pointer_cast<mllama::Model>(
+        Model->toQuantized(Quantized.first, Quantized.second));
+  }
   std::vector<fs::path> WeightFiles;
   for (auto &P : fs::directory_iterator(Path)) {
     if (P.path().extension() == ".safetensors")
@@ -162,7 +167,7 @@ Model Model::fromPretrained(const std::string &PathOrHfRepo) {
   }
   Weights = VisionModel::sanitize(Weights);
   Weights = LanguageModel::sanitize(Weights);
-  Model.update(Weights);
+  Model->update(Weights);
   return Model;
 }
 } // namespace mllama

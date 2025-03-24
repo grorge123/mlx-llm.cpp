@@ -27,9 +27,9 @@ public:
   void update(const mx::array &NewKeys, const mx::array &NewValues);
 };
 
-mx::array createAttentionMask(mx::array H,
-                              std::optional<mx::array> Cache = std::nullopt);
-                        
+mx::array
+createAttentionMask(mx::array H,
+                    std::optional<std::vector<vlm::KVCache *>> = std::nullopt);
 
 mx::array createAdditiveCausalMask(int N, int Offset = 0);
 } // namespace vlm

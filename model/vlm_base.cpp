@@ -78,7 +78,9 @@ mx::array createAdditiveCausalMask(int N, int Offset) {
   return mx::less(mx::expand_dims(Linds, 1), mx::expand_dims(Rinds, 0));
 }
 
-mx::array createAttentionMask(mx::array H, std::optional<mx::array> Cache) {
+mx::array
+createAttentionMask(mx::array H,
+                    std::optional<std::vector<vlm::KVCache *>> Cache) {
   int T = H.shape()[1];
   mx::array Mask = mx::array({});
   if (T > 1) {

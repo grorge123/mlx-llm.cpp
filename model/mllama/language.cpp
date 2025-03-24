@@ -409,8 +409,8 @@ mx::array MllamaTextModel::forward(
   return HiddenStates;
 }
 
-LanguageModel::LanguageModel(const TextConfig &Config)
-    : Config(Config), Model(std::make_unique<MllamaTextModel>(Config)) {
+LanguageModel::LanguageModel(const TextConfig &Config) : Config(Config) {
+  registerModule("model", std::make_shared<MllamaTextModel>(Config));
   registerModule("lm_head", std::make_shared<nn::Linear>(nn::Linear(
                                 Config.HiddenSize, Config.VocabSize, false)));
 }
@@ -423,9 +423,11 @@ LanguageModel::forward(const std::optional<mx::array> &InputIds,
                        const std::optional<mx::array> &FullTextRowMaskedOutMask,
                        const std::optional<mx::array> &InputsEmbeds,
                        std::vector<vlm::KVCache *> *Cache) {
-  mx::array HiddenStates = Model->forward(
-      InputIds, Mask, std::nullopt, CrossAttentionStates, CrossAttentionMask,
-      FullTextRowMaskedOutMask, InputsEmbeds, Cache);
+  mx::array HiddenStates =
+      std::dynamic_pointer_cast<MllamaTextModel>(Submodules["model"])
+          ->forward(InputIds, Mask, std::nullopt, CrossAttentionStates,
+                    CrossAttentionMask, FullTextRowMaskedOutMask, InputsEmbeds,
+                    Cache);
   mx::array Logits =
       std::dynamic_pointer_cast<nn::Linear>(Submodules["lm_head"])
           ->forward(HiddenStates);

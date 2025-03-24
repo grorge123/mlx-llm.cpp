@@ -4,9 +4,9 @@
 #include <string>
 #include <vector>
 
+#include "../vlm_base.h"
 #include "base.h"
 #include "linear.h"
-#include "../vlm_base.h"
 #include "normalization.h"
 #include "positional_encoding.h"
 #include <simdjson.h>
@@ -171,7 +171,6 @@ public:
 
 private:
   TextConfig Config;
-  std::unique_ptr<MllamaTextModel> Model;
 };
 
 } // namespace mllama
