@@ -20,8 +20,8 @@ mx::array QuantizedLinear::forward(mx::array Input) {
   auto Out = mx::quantized_matmul(
       Input, Parameters.at("weight"), Parameters.at("scales"),
       Parameters.at("biases"), true, GroupSize, Bits);
-  if (Parameters.find("biases") != Parameters.end()) {
-    Out = add(Out, Parameters.at("biases"));
+  if (Parameters.find("bias") != Parameters.end()) {
+    Out = add(Out, Parameters.at("bias"));
   }
   return Out;
 }
@@ -45,7 +45,7 @@ QuantizedLinear::fromLinear(std::shared_ptr<Linear> LinearModule, int GroupSize,
                             int Bits) {
   auto LinearShape = LinearModule->Parameters.at("weight").shape();
   const bool EnableBias =
-      LinearModule->Parameters.find("biases") != LinearModule->Parameters.end();
+      LinearModule->Parameters.find("bias") != LinearModule->Parameters.end();
   auto QuantizedModel = std::make_shared<QuantizedLinear>(QuantizedLinear(
       LinearShape[0], LinearShape[1], EnableBias, GroupSize, Bits));
   auto Quantized =
@@ -57,7 +57,7 @@ QuantizedLinear::fromLinear(std::shared_ptr<Linear> LinearModule, int GroupSize,
       "biases", std::move(std::get<2>(Quantized)));
   if (EnableBias) {
     QuantizedModel->Parameters.insert_or_assign(
-        "biases", LinearModule->Parameters.at("biases"));
+        "bias", LinearModule->Parameters.at("bias"));
   }
   return QuantizedModel;
 }

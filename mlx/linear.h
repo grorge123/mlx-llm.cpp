@@ -19,7 +19,7 @@ public:
     registerParameter(
         "weight", mx::random::uniform(-Scale, Scale, {OutputDims, InputDims}));
     if (EnableBias) {
-      registerParameter("biases", mx::random::uniform(-Scale, Scale,
+      registerParameter("bias", mx::random::uniform(-Scale, Scale,
                                                     {
                                                         OutputDims,
                                                     }));
