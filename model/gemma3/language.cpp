@@ -138,11 +138,19 @@ mx::array Attention::forward(const mx::array &X,
                                     {B, L, -1}),
                             {0, 2, 1}));
   }
-  return std::dynamic_pointer_cast<nn::Linear>(Submodules["o_proj"])
-      ->forward(transpose(reshape(mx::fast::scaled_dot_product_attention(
-                                      Queries, Keys, Values, Scale, Mask),
-                                  {B, L, -1}),
-                          {0, 2, 1}));
+  return Mask.has_value()
+             ? std::dynamic_pointer_cast<nn::Linear>(Submodules["o_proj"])
+                   ->forward(transpose(
+                       reshape(mx::fast::scaled_dot_product_attention(
+                                   Queries, Keys, Values, Scale, Mask.value()),
+                               {B, L, -1}),
+                       {0, 2, 1}))
+             : std::dynamic_pointer_cast<nn::Linear>(Submodules["o_proj"])
+                   ->forward(
+                       transpose(reshape(mx::fast::scaled_dot_product_attention(
+                                             Queries, Keys, Values, Scale),
+                                         {B, L, -1}),
+                                 {0, 2, 1}));
 }
 
 MLP::MLP(int Dim, int HiddenDim) {

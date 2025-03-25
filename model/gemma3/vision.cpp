@@ -96,8 +96,11 @@ mx::array VisionAttention::forward(const mx::array &X,
   int S = Keys.shape()[1];
   Keys = transpose(reshape(Keys, {B, S, NumHeads, -1}), {0, 2, 1, 3});
   Values = transpose(reshape(Values, {B, S, NumHeads, -1}), {0, 2, 1, 3});
-  mx::array Output = mx::fast::scaled_dot_product_attention(
-      Queries, Keys, Values, Scale, Mask);
+  mx::array Output =
+      Mask.has_value() ? mx::fast::scaled_dot_product_attention(
+                             Queries, Keys, Values, Scale, Mask.value())
+                       : mx::fast::scaled_dot_product_attention(Queries, Keys,
+                                                                Values, Scale);
   Output = reshape(transpose(Output, {0, 2, 1, 3}), {B, L, -1});
   return std::dynamic_pointer_cast<nn::Linear>(Submodules["out_proj"])
       ->forward(Output);

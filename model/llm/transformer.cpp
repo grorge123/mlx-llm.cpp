@@ -51,8 +51,12 @@ Attention::forward(mx::array Input, std::optional<mx::array> Mask,
     Keys =
         std::dynamic_pointer_cast<nn::RoPE>(Submodules["rope"])->forward(Keys);
   }
-  mx::array Output = mx::fast::scaled_dot_product_attention(
-      Queries, Keys, Values, Scale, Mask);
+  mx::array Output =
+      Mask.has_value() ? mx::fast::scaled_dot_product_attention(
+                             Queries, Keys, Values, Scale, Mask.value())
+                       : mx::fast::scaled_dot_product_attention(Queries, Keys,
+                                                                Values, Scale);
+
   Output = reshape(transpose(Output, {0, 2, 1, 3}), {B, L, -1});
   return {std::dynamic_pointer_cast<nn::Linear>(Submodules["o_proj"])
               ->forward(Output),

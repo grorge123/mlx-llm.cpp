@@ -150,7 +150,10 @@ MllamaVisionAttention::forward(const mx::array &HiddenState,
     MaskOpt = take(MaskOpt.value(), Indices, -2);
   }
   mx::array AttnOutput =
-      mx::fast::scaled_dot_product_attention(Query, Key, Value, Scale, MaskOpt);
+      MaskOpt.has_value()
+          ? mx::fast::scaled_dot_product_attention(Query, Key, Value, Scale,
+                                                   MaskOpt.value())
+          : mx::fast::scaled_dot_product_attention(Query, Key, Value, Scale);
   AttnOutput = reshape(transpose(AttnOutput, {0, 2, 1, 3}),
                        {BatchSize, QSeqLen, EmbedDim});
   return std::dynamic_pointer_cast<nn::Linear>(Submodules["o_proj"])
@@ -482,4 +485,4 @@ std::unordered_map<std::string, mx::array> VisionModel::sanitize(
   }
   return SanitizedWeights;
 }
-} // namespace mlllama
+} // namespace mllama

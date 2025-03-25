@@ -142,9 +142,14 @@ mx::array MllamaTextCrossAttention::forward(
     KeyStates = std::dynamic_pointer_cast<nn::RMSNorm>(Submodules["k_norm"])
                     ->forward(KeyStates);
   }
+  mx::array AttnOutput =
+      AttentionMask.has_value()
+          ? mx::fast::scaled_dot_product_attention(QueryStates, KeyStates,
+                                                   ValueStates, Scale,
+                                                   AttentionMask.value())
+          : mx::fast::scaled_dot_product_attention(QueryStates, KeyStates,
+                                                   ValueStates, Scale);
 
-  mx::array AttnOutput = mx::fast::scaled_dot_product_attention(
-      QueryStates, KeyStates, ValueStates, Scale, AttentionMask);
   AttnOutput = reshape(transpose(AttnOutput, {0, 2, 1, 3}),
                        {BatchSize, QLen, HiddenSize});
   return std::dynamic_pointer_cast<nn::Linear>(Submodules["o_proj"])
@@ -210,8 +215,12 @@ mx::array MllamaTextSelfAttention::forward(const mx::array &X,
                     ->forward(KeyStates);
   }
 
-  mx::array AttnOutput = mx::fast::scaled_dot_product_attention(
-      QueryStates, KeyStates, ValueStates, Scale, Mask);
+  mx::array AttnOutput =
+      Mask.has_value()
+          ? mx::fast::scaled_dot_product_attention(
+                QueryStates, KeyStates, ValueStates, Scale, Mask.value())
+          : mx::fast::scaled_dot_product_attention(QueryStates, KeyStates,
+                                                   ValueStates, Scale);
   AttnOutput = reshape(transpose(AttnOutput, {0, 2, 1, 3}),
                        {BatchSize, QLen, HiddenSize});
   return std::dynamic_pointer_cast<nn::Linear>(Submodules["o_proj"])
