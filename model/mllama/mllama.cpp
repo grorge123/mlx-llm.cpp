@@ -133,9 +133,8 @@ Model::prepareCrossAttentionMask(const mx::array &CrossAttentionMask,
   return {CrossAttnMask, FullTextRowMaskedOutMask};
 }
 
-std::shared_ptr<Model> Model::fromPretrained(const std::string &PathOrHfRepo,
-                                             std::pair<int, int> Quantized) {
-  fs::path Path(PathOrHfRepo);
+std::shared_ptr<Model> Model::fromPretrained(const std::string &ModelPath) {
+  fs::path Path(ModelPath);
   simdjson::dom::parser Parser;
   simdjson::dom::element Doc;
   auto Error = Parser.load((Path / "config.json").string()).get(Doc);
@@ -149,9 +148,12 @@ std::shared_ptr<Model> Model::fromPretrained(const std::string &PathOrHfRepo,
       VisionConfig::fromDict(Obj["vision_config"].get_object().value());
   ModelConfig.TextConfig = TextConfig::fromDict(Obj.value());
   auto Model = std::make_shared<mllama::Model>(mllama::Model(ModelConfig));
-  if (Quantized.first != 0 && Quantized.second != 0) {
+  auto QuantResult = Obj["quantization"].get_object();
+  if (!QuantResult.error()) {
+    auto GroupSize = static_cast<int>(QuantResult.value()["group_size"]);
+    auto Bits = static_cast<int>(QuantResult.value()["bits"]);
     Model = std::dynamic_pointer_cast<mllama::Model>(
-        Model->toQuantized(Quantized.first, Quantized.second));
+        Model->toQuantized(GroupSize, Bits));
   }
   std::vector<fs::path> WeightFiles;
   for (auto &P : fs::directory_iterator(Path)) {

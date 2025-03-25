@@ -30,9 +30,7 @@ public:
           const std::optional<mx::array> &AspectRatioIds = std::nullopt,
           const std::optional<mx::array> &AspectRatioMask = std::nullopt,
           const std::optional<mx::array> &CrossAttentionMask = std::nullopt);
-  static std::shared_ptr<Model>
-  fromPretrained(const std::string &PathOrHfRepo,
-                 std::pair<int, int> Quantized = {});
+  static std::shared_ptr<Model> fromPretrained(const std::string &ModelPath);
 
 protected:
   std::pair<mx::array, mx::array>

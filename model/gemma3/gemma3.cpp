@@ -166,8 +166,8 @@ Model::forward(const mx::array &InputIds, const mx::array &PixelValues,
   return Logits;
 }
 
-std::shared_ptr<Model> Model::fromPretrained(const std::string &PathOrHfRepo) {
-  std::filesystem::path Path(PathOrHfRepo);
+std::shared_ptr<Model> Model::fromPretrained(const std::string &ModelPath) {
+  std::filesystem::path Path(ModelPath);
   simdjson::dom::parser Parser;
   simdjson::dom::element Doc;
   auto Error = Parser.load((Path / "config.json").string()).get(Doc);
@@ -182,6 +182,13 @@ std::shared_ptr<Model> Model::fromPretrained(const std::string &PathOrHfRepo) {
   ModelConfigObj.TextConfig =
       TextConfig::fromDict(Obj["text_config"].get_object().value());
   auto Model = std::make_shared<gemma3::Model>(gemma3::Model(ModelConfigObj));
+  auto QuantResult = Obj["quantization"].get_object();
+  if (!QuantResult.error()) {
+    auto GroupSize = static_cast<int>(QuantResult.value()["group_size"]);
+    auto Bits = static_cast<int>(QuantResult.value()["bits"]);
+    Model = std::dynamic_pointer_cast<gemma3::Model>(
+        Model->toQuantized(GroupSize, Bits));
+  }
   std::vector<std::filesystem::path> WeightFiles;
   for (auto &P : std::filesystem::directory_iterator(Path)) {
     if (P.path().extension() == ".safetensors")

@@ -51,7 +51,7 @@ public:
       const mx::array &InputIds, const mx::array &PixelValues,
       const mx::array &Mask,
       const std::optional<std::vector<vlm::KVCache *>> &Cache = std::nullopt);
-  static std::shared_ptr<Model> fromPretrained(const std::string &PathOrHfRepo);
+  static std::shared_ptr<Model> fromPretrained(const std::string &ModelPath);
   std::unordered_map<std::string, mx::array>
   sanitize(const std::unordered_map<std::string, mx::array> &Weights);
   ModelConfig Config;
