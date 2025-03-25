@@ -40,11 +40,12 @@ ModelConfig ModelConfig::fromDict(const simdjson::dom::object &Obj) {
 
 Gemma3MultiModalProjector::Gemma3MultiModalProjector(
     const ModelConfig &Config) {
-  MmInputProjectionWeight =
-      mx::ones({Config.VisionConfig.HiddenSize, Config.TextConfig.HiddenSize});
   registerModule("mm_soft_emb_norm",
                  std::make_shared<RMSNorm>(Config.VisionConfig.HiddenSize,
                                            Config.VisionConfig.LayerNormEps));
+  registerParameter(
+      "mm_input_projection_weight",
+      mx::ones({Config.VisionConfig.HiddenSize, Config.TextConfig.HiddenSize}));
   PatchesPerImage =
       Config.VisionConfig.ImageSize / Config.VisionConfig.PatchSize;
   TokensPerSide = static_cast<int>(
@@ -70,7 +71,8 @@ mx::array Gemma3MultiModalProjector::forward(const mx::array &X) {
           ->forward(PooledVisionOutputs);
   mx::array ProjectedVisionOutputs = mx::einsum(
       "btm,md->btd",
-      std::vector<mx::array>({NormedVisionOutputs, MmInputProjectionWeight}));
+      std::vector<mx::array>(
+          {NormedVisionOutputs, Parameters.at("mm_input_projection_weight")}));
   return astype(ProjectedVisionOutputs, X.dtype());
 }
 

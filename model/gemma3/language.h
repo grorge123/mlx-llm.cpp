@@ -40,7 +40,6 @@ public:
   mx::array forward(const mx::array &X);
 
 private:
-  mx::array Weight;
   float Eps;
 };
 

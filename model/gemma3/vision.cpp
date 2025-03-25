@@ -152,10 +152,9 @@ mx::array EncoderLayer::forward(const mx::array &X,
 
 Encoder::Encoder(const VisionConfig &Config) {
   for (int I = 0; I < Config.NumHiddenLayers; I++) {
-    std::string Key = "encoder_layer_" + std::to_string(I);
-    registerModule(Key, std::make_shared<EncoderLayer>(Config));
-    Layers.push_back(std::dynamic_pointer_cast<EncoderLayer>(Submodules[Key]));
+    Layers.push_back(std::make_shared<EncoderLayer>(Config));
   }
+  registerLayer("layers", Layers);
 }
 
 std::pair<mx::array, std::vector<mx::array>>

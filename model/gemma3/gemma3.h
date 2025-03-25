@@ -31,7 +31,6 @@ public:
   mx::array forward(const mx::array &X);
 
 private:
-  mx::array MmInputProjectionWeight = mx::array({});
   nn::AvgPool2d AvgPool = nn::AvgPool2d({0});
   int PatchesPerImage;
   int TokensPerSide;

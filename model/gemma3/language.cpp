@@ -67,10 +67,12 @@ TextConfig TextConfig::fromDict(const simdjson::dom::object &Obj) {
   return Config;
 }
 
-RMSNorm::RMSNorm(int Dims, float Eps) : Weight(mx::ones({Dims})), Eps(Eps) {}
+RMSNorm::RMSNorm(int Dims, float Eps) : Eps(Eps) {
+  registerParameter("weight", mx::ones({Dims}));
+}
 
 mx::array RMSNorm::forward(const mx::array &X) {
-  return mx::fast::rms_norm(X, 1.0 + Weight, Eps);
+  return mx::fast::rms_norm(X, 1.0 + Parameters.at("weight"), Eps);
 }
 
 Attention::Attention(const TextConfig &Config, int LayerIdx)
@@ -182,7 +184,7 @@ TransformerBlock::TransformerBlock(const TextConfig &Config, int LayerIdx)
   registerModule("input_layernorm", std::make_shared<gemma3::RMSNorm>(
                                         Config.HiddenSize, Config.RmsNormEps));
   registerModule(
-      "post_attn_layernorm",
+      "post_attention_layernorm",
       std::make_shared<gemma3::RMSNorm>(Config.HiddenSize, Config.RmsNormEps));
   registerModule(
       "pre_feedforward_layernorm",
@@ -202,7 +204,7 @@ TransformerBlock::forward(const mx::array &X,
                                   ->forward(X),
                               Mask, Cache);
   mx::array H = X + std::dynamic_pointer_cast<gemma3::RMSNorm>(
-                        Submodules["post_attn_layernorm"])
+                        Submodules["post_attention_layernorm"])
                         ->forward(R);
   R = std::dynamic_pointer_cast<MLP>(Submodules["mlp"])
           ->forward(std::dynamic_pointer_cast<gemma3::RMSNorm>(
@@ -223,6 +225,8 @@ Gemma3Model::Gemma3Model(const TextConfig &Config) : Config(Config) {
     Layers.push_back(std::make_shared<TransformerBlock>(Config, I));
   }
   registerLayer("layers", Layers);
+  registerModule("norm", std::make_shared<gemma3::RMSNorm>(Config.HiddenSize,
+                                                           Config.RmsNormEps));
 }
 
 mx::array
