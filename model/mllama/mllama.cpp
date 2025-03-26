@@ -60,7 +60,7 @@ Model::Model(const ModelConfig &Config) : Config(Config) {
 
 std::tuple<mx::array, std::optional<mx::array>>
 Model::forward(const mx::array &InputIds, const mx::array &PixelValues,
-               const mx::array &Mask, std::vector<vlm::KVCache *> *Cache,
+               const mx::array &Mask, std::vector<vlm::BaseCache *> *Cache,
                const std::optional<mx::array> &AspectRatioIds,
                const std::optional<mx::array> &AspectRatioMask,
                const std::optional<mx::array> &CrossAttentionMask) {

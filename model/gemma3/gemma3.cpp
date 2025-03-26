@@ -159,7 +159,7 @@ std::pair<mx::array, mx::array> Model::_prepareInputsForMultimodal(
 LanguageModelOutput
 Model::forward(const mx::array &InputIds, const mx::array &PixelValues,
                const mx::array &Mask,
-               const std::optional<std::vector<vlm::KVCache *>> &Cache) {
+               const std::optional<std::vector<vlm::BaseCache *>> &Cache) {
   auto Pair = getInputEmbeddings(InputIds, PixelValues, Mask);
   mx::array InputEmbeds = Pair.first;
   auto Logits =

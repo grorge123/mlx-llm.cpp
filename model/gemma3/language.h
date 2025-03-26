@@ -46,9 +46,10 @@ private:
 class Attention : public nn::Module {
 public:
   Attention(const TextConfig &Config, int LayerIdx);
-  mx::array forward(const mx::array &X,
-                    const std::optional<mx::array> &Mask = std::nullopt,
-                    const std::optional<vlm::KVCache *> &Cache = std::nullopt);
+  mx::array
+  forward(const mx::array &X,
+          const std::optional<mx::array> &Mask = std::nullopt,
+          const std::optional<vlm::BaseCache *> &Cache = std::nullopt);
 
 private:
   int NHeads;
@@ -71,9 +72,10 @@ public:
 class TransformerBlock : public nn::Module {
 public:
   TransformerBlock(const TextConfig &Config, int LayerIdx);
-  mx::array forward(const mx::array &X,
-                    const std::optional<mx::array> &Mask = std::nullopt,
-                    const std::optional<vlm::KVCache *> &Cache = std::nullopt);
+  mx::array
+  forward(const mx::array &X,
+          const std::optional<mx::array> &Mask = std::nullopt,
+          const std::optional<vlm::BaseCache *> &Cache = std::nullopt);
 
 private:
   int NumAttentionHeads;
@@ -87,7 +89,7 @@ public:
       const mx::array &Inputs,
       const std::optional<mx::array> &InputsEmbeds = std::nullopt,
       const std::optional<mx::array> &Mask = std::nullopt,
-      const std::optional<std::vector<vlm::KVCache *>> &Cache = std::nullopt);
+      const std::optional<std::vector<vlm::BaseCache *>> &Cache = std::nullopt);
   std::vector<std::shared_ptr<TransformerBlock>> Layers;
   TextConfig Config;
 };
@@ -103,7 +105,7 @@ public:
       const mx::array &Inputs,
       const std::optional<mx::array> &InputsEmbeds = std::nullopt,
       const std::optional<mx::array> &Mask = std::nullopt,
-      const std::optional<std::vector<vlm::KVCache *>> &Cache = std::nullopt);
+      const std::optional<std::vector<vlm::BaseCache *>> &Cache = std::nullopt);
   std::unordered_map<std::string, mx::array>
   sanitize(const std::unordered_map<std::string, mx::array> &Weights);
   int headDim() const;

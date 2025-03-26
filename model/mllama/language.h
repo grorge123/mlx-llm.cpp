@@ -45,7 +45,7 @@ public:
   forward(const mx::array &HiddenStates,
           const std::optional<mx::array> &CrossAttentionStates = std::nullopt,
           const std::optional<mx::array> &AttentionMask = std::nullopt,
-          vlm::KVCache *Cache = nullptr);
+          vlm::BaseCache *Cache = nullptr);
 
 private:
   TextConfig Config;
@@ -65,7 +65,7 @@ public:
 
   mx::array forward(const mx::array &X,
                     const std::optional<mx::array> &Mask = std::nullopt,
-                    vlm::KVCache *Cache = nullptr);
+                    vlm::BaseCache *Cache = nullptr);
 
 private:
   TextConfig Config;
@@ -93,7 +93,7 @@ public:
 
   mx::array forward(const mx::array &HiddenStates,
                     const std::optional<mx::array> &Mask = std::nullopt,
-                    vlm::KVCache *Cache = nullptr);
+                    vlm::BaseCache *Cache = nullptr);
 
 private:
   int HiddenSize;
@@ -108,7 +108,7 @@ public:
       const mx::array &HiddenStates, const mx::array &CrossAttentionStates,
       const std::optional<mx::array> &AttentionMask = std::nullopt,
       const std::optional<mx::array> &FullTextRowMaskedOutMask = std::nullopt,
-      vlm::KVCache *Cache = nullptr);
+      vlm::BaseCache *Cache = nullptr);
 
 private:
   int HiddenSize;
@@ -129,7 +129,7 @@ public:
       const std::optional<mx::array> &CrossAttentionMask = std::nullopt,
       const std::optional<mx::array> &FullTextRowMaskedOutMask = std::nullopt,
       const std::optional<mx::array> &InputsEmbeds = std::nullopt,
-      std::vector<vlm::KVCache *> *Cache = nullptr);
+      std::vector<vlm::BaseCache *> *Cache = nullptr);
 
 private:
   TextConfig Config;
@@ -160,7 +160,7 @@ public:
       const std::optional<mx::array> &CrossAttentionMask = std::nullopt,
       const std::optional<mx::array> &FullTextRowMaskedOutMask = std::nullopt,
       const std::optional<mx::array> &InputsEmbeds = std::nullopt,
-      std::vector<vlm::KVCache *> *Cache = nullptr);
+      std::vector<vlm::BaseCache *> *Cache = nullptr);
 
   static std::unordered_map<std::string, mx::array>
   sanitize(const std::unordered_map<std::string, mx::array> &Weights);

@@ -105,7 +105,7 @@ MllamaTextCrossAttention::MllamaTextCrossAttention(const TextConfig &Config,
 mx::array MllamaTextCrossAttention::forward(
     const mx::array &HiddenStates,
     const std::optional<mx::array> &CrossAttentionStates,
-    const std::optional<mx::array> &AttentionMask, vlm::KVCache *Cache) {
+    const std::optional<mx::array> &AttentionMask, vlm::BaseCache *Cache) {
   auto Shape = HiddenStates.shape();
   int BatchSize = Shape[0];
   int QLen = Shape[1];
@@ -134,7 +134,8 @@ mx::array MllamaTextCrossAttention::forward(
     KeyStates = std::dynamic_pointer_cast<nn::RMSNorm>(Submodules["k_norm"])
                     ->forward(KeyStates);
   } else if (Cache != nullptr && Cache->Offset > 0) {
-    std::tie(KeyStates, ValueStates) = Cache->fetch();
+    std::tie(KeyStates, ValueStates) =
+        dynamic_cast<vlm::KVCache *>(Cache)->fetch();
   } else {
     auto Splits = mx::split(Query, 2, 1);
     KeyStates = Splits[0];
@@ -180,7 +181,7 @@ MllamaTextSelfAttention::MllamaTextSelfAttention(const TextConfig &Config,
 
 mx::array MllamaTextSelfAttention::forward(const mx::array &X,
                                            const std::optional<mx::array> &Mask,
-                                           vlm::KVCache *Cache) {
+                                           vlm::BaseCache *Cache) {
   auto Shape = X.shape();
   int BatchSize = Shape[0];
   int QLen = Shape[1];
@@ -266,7 +267,7 @@ MllamaSelfAttentionDecoderLayer::MllamaSelfAttentionDecoderLayer(
 mx::array
 MllamaSelfAttentionDecoderLayer::forward(const mx::array &HiddenStates,
                                          const std::optional<mx::array> &Mask,
-                                         vlm::KVCache *Cache) {
+                                         vlm::BaseCache *Cache) {
   mx::array Residual = HiddenStates;
   mx::array Normed =
       std::dynamic_pointer_cast<nn::RMSNorm>(Submodules["input_layernorm"])
@@ -304,7 +305,7 @@ mx::array MllamaCrossAttentionDecoderLayer::forward(
     const mx::array &HiddenStates, const mx::array &CrossAttentionStates,
     const std::optional<mx::array> &AttentionMask,
     const std::optional<mx::array> &FullTextRowMaskedOutMask,
-    vlm::KVCache *Cache) {
+    vlm::BaseCache *Cache) {
   mx::array Residual = HiddenStates;
   mx::array Normed =
       std::dynamic_pointer_cast<nn::RMSNorm>(Submodules["input_layernorm"])
@@ -359,7 +360,7 @@ mx::array MllamaTextModel::forward(
     const std::optional<mx::array> &CrossAttentionMask,
     const std::optional<mx::array> &FullTextRowMaskedOutMask,
     const std::optional<mx::array> &InputsEmbeds,
-    std::vector<vlm::KVCache *> *Cache) {
+    std::vector<vlm::BaseCache *> *Cache) {
   mx::array InputsEmbedsLocal = mx::array({});
   int BatchSize, SeqLength;
   if (InputIds.has_value() && InputsEmbeds.has_value()) {
@@ -395,7 +396,7 @@ mx::array MllamaTextModel::forward(
   mx::array MaskLocal = vlm::createAttentionMask(HiddenStates);
 
   for (size_t Idx = 0; Idx < Layers.size(); ++Idx) {
-    vlm::KVCache *LayerCache =
+    vlm::BaseCache *LayerCache =
         (Cache != nullptr && Idx < Cache->size()) ? (*Cache)[Idx] : nullptr;
     bool IsCross = std::find(Config.CrossAttentionLayers.begin(),
                              Config.CrossAttentionLayers.end(),
@@ -431,7 +432,7 @@ LanguageModel::forward(const std::optional<mx::array> &InputIds,
                        const std::optional<mx::array> &CrossAttentionMask,
                        const std::optional<mx::array> &FullTextRowMaskedOutMask,
                        const std::optional<mx::array> &InputsEmbeds,
-                       std::vector<vlm::KVCache *> *Cache) {
+                       std::vector<vlm::BaseCache *> *Cache) {
   mx::array HiddenStates =
       std::dynamic_pointer_cast<MllamaTextModel>(Submodules["model"])
           ->forward(InputIds, Mask, std::nullopt, CrossAttentionStates,

@@ -26,7 +26,7 @@ public:
   explicit Model(const ModelConfig &Config);
   std::tuple<mx::array, std::optional<mx::array>>
   forward(const mx::array &InputIds, const mx::array &PixelValues,
-          const mx::array &Mask, std::vector<vlm::KVCache *> *Cache = nullptr,
+          const mx::array &Mask, std::vector<vlm::BaseCache *> *Cache = nullptr,
           const std::optional<mx::array> &AspectRatioIds = std::nullopt,
           const std::optional<mx::array> &AspectRatioMask = std::nullopt,
           const std::optional<mx::array> &CrossAttentionMask = std::nullopt);
