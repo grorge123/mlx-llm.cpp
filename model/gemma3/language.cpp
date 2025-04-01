@@ -100,9 +100,9 @@ Attention::Attention(const TextConfig &Config, int LayerIdx)
                                         : Config.RopeGlobalBaseFreq)));
 }
 
-mx::array Attention::forward(const mx::array &X,
-                             const std::optional<mx::array> &Mask,
-                             const std::optional<vlm::BaseCache *> &Cache) {
+mx::array Attention::forward(
+    const mx::array &X, const std::optional<mx::array> &Mask,
+    const std::optional<std::shared_ptr<vlm::BaseCache>> &Cache) {
   auto Shape = X.shape();
   int B = Shape[0], L = Shape[1];
   mx::array Queries =
@@ -194,10 +194,9 @@ TransformerBlock::TransformerBlock(const TextConfig &Config, int LayerIdx)
       std::make_shared<gemma3::RMSNorm>(Config.HiddenSize, Config.RmsNormEps));
 }
 
-mx::array
-TransformerBlock::forward(const mx::array &X,
-                          const std::optional<mx::array> &Mask,
-                          const std::optional<vlm::BaseCache *> &Cache) {
+mx::array TransformerBlock::forward(
+    const mx::array &X, const std::optional<mx::array> &Mask,
+    const std::optional<std::shared_ptr<vlm::BaseCache>> &Cache) {
   mx::array R = std::dynamic_pointer_cast<Attention>(Submodules["self_attn"])
                     ->forward(std::dynamic_pointer_cast<gemma3::RMSNorm>(
                                   Submodules["input_layernorm"])
@@ -232,7 +231,7 @@ Gemma3Model::Gemma3Model(const TextConfig &Config) : Config(Config) {
 mx::array Gemma3Model::forward(
     const mx::array &Inputs, const std::optional<mx::array> &InputsEmbeds,
     const std::optional<mx::array> &Mask,
-    const std::optional<std::vector<vlm::BaseCache *>> &Cache) {
+    const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache) {
   mx::array H =
       InputsEmbeds.has_value()
           ? InputsEmbeds.value()
@@ -241,17 +240,17 @@ mx::array Gemma3Model::forward(
   H = H *
       mlx::core::astype(
           mx::array(std::pow(Config.HiddenSize, 0.5), mx::bfloat16), H.dtype());
-  const std::vector<vlm::BaseCache *> &CacheValue =
-      Cache.has_value()
-          ? Cache.value()
-          : std::vector<vlm::BaseCache *>(Config.NumHiddenLayers, nullptr);
+  std::vector<std::shared_ptr<vlm::BaseCache>> CacheValue =
+      Cache.has_value() ? Cache.value()
+                        : std::vector<std::shared_ptr<vlm::BaseCache>>(
+                              Config.NumHiddenLayers, nullptr);
   mx::array FullMask = mx::array({});
   mx::array SlidingWindowMask = mx::array({});
   if (!Mask.has_value()) {
     int J = Config.SlidingWindowPattern;
     FullMask = vlm::createAttentionMask(
-        H, std::vector<vlm::BaseCache *>(CacheValue.begin() + J - 1,
-                                         CacheValue.begin() + J));
+        H, std::vector<std::shared_ptr<vlm::BaseCache>>(
+               CacheValue.begin() + J - 1, CacheValue.begin() + J));
     SlidingWindowMask = vlm::createAttentionMask(H, CacheValue);
   }
   for (size_t I = 0; I < Layers.size(); I++) {
@@ -276,15 +275,15 @@ LanguageModel::LanguageModel(const TextConfig &Config) : Config(Config) {
                                 Config.HiddenSize, Config.VocabSize, false));
 }
 
-LanguageModelOutput LanguageModel::forward(
+std::tuple<mx::array, std::optional<mx::array>> LanguageModel::forward(
     const mx::array &Inputs, const std::optional<mx::array> &InputsEmbeds,
     const std::optional<mx::array> &Mask,
-    const std::optional<std::vector<vlm::BaseCache *>> &Cache) {
+    const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache) {
   mx::array Out = std::dynamic_pointer_cast<Gemma3Model>(Submodules["model"])
                       ->forward(Inputs, InputsEmbeds, Mask, Cache);
   Out = std::dynamic_pointer_cast<nn::Linear>(Submodules["lm_head"])
             ->forward(Out);
-  return LanguageModelOutput{Out};
+  return std::tuple<mx::array, std::optional<mx::array>>{Out, {}};
 }
 
 std::unordered_map<std::string, mx::array> LanguageModel::sanitize(
@@ -303,15 +302,19 @@ std::unordered_map<std::string, mx::array> LanguageModel::sanitize(
 int LanguageModel::headDim() const { return Config.HeadDim; }
 
 int LanguageModel::nKvHeads() const { return Config.NumKeyValueHeads; }
+int LanguageModel::layers() const { return Config.NumHiddenLayers; }
 
-// std::vector<void *> LanguageModel::makeCache() {
-//   std::vector<void *> caches;
-//   for (int i = 0; i < Config.NumHiddenLayers; i++) {
-//     if (i % Config.SlidingWindowPattern == Config.SlidingWindowPattern - 1)
-//       caches.push_back(new KVCache(Config.HeadDim, Config.NumKeyValueHeads));
-//     else
-//       caches.push_back(new RotatingKVCache(Config.SlidingWindow, 0));
-//   }
-//   return caches;
-// }
+std::vector<std::shared_ptr<vlm::BaseCache>> LanguageModel::makeCache() {
+  std::vector<std::shared_ptr<vlm::BaseCache>> Caches;
+  for (int I = 0; I < Config.NumHiddenLayers; I++) {
+    if (I % Config.SlidingWindowPattern == Config.SlidingWindowPattern - 1) {
+      Caches.emplace_back(std::make_shared<vlm::KVCache>(
+          Config.HeadDim, Config.NumKeyValueHeads));
+    } else {
+      Caches.emplace_back(
+          std::make_shared<vlm::RotatingKVCache>(Config.SlidingWindow, 0));
+    }
+  }
+  return Caches;
+}
 } // namespace gemma3

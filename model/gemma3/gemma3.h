@@ -37,7 +37,7 @@ private:
   int KernelSize;
 };
 
-class Model : public nn::Module {
+class Model : public vlm::Module {
 public:
   Model(const ModelConfig &Config);
   std::pair<mx::array, mx::array>
@@ -46,10 +46,11 @@ public:
   std::pair<mx::array, mx::array> _prepareInputsForMultimodal(
       const mx::array &ImageFeatures, const mx::array &InputsEmbeds,
       const mx::array &InputIds, const mx::array &AttentionMask);
-  LanguageModelOutput forward(
+  std::tuple<mx::array, std::optional<mx::array>> forward(
       const mx::array &InputIds, const mx::array &PixelValues,
       const mx::array &Mask,
-      const std::optional<std::vector<vlm::BaseCache *>> &Cache = std::nullopt);
+      const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache =
+          std::nullopt) override;
   static std::shared_ptr<Model> fromPretrained(const std::string &ModelPath);
   std::unordered_map<std::string, mx::array>
   sanitize(const std::unordered_map<std::string, mx::array> &Weights);

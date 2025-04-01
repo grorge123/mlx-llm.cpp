@@ -156,10 +156,10 @@ std::pair<mx::array, mx::array> Model::_prepareInputsForMultimodal(
   return {FinalEmbedding, FinalAttentionMask4d};
 }
 
-LanguageModelOutput
-Model::forward(const mx::array &InputIds, const mx::array &PixelValues,
-               const mx::array &Mask,
-               const std::optional<std::vector<vlm::BaseCache *>> &Cache) {
+std::tuple<mx::array, std::optional<mx::array>> Model::forward(
+    const mx::array &InputIds, const mx::array &PixelValues,
+    const mx::array &Mask,
+    const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache) {
   auto Pair = getInputEmbeddings(InputIds, PixelValues, Mask);
   mx::array InputEmbeds = Pair.first;
   auto Logits =

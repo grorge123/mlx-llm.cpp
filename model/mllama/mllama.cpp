@@ -58,12 +58,13 @@ Model::Model(const ModelConfig &Config) : Config(Config) {
                                    Config.TextConfig.HiddenSize, true));
 }
 
-std::tuple<mx::array, std::optional<mx::array>>
-Model::forward(const mx::array &InputIds, const mx::array &PixelValues,
-               const mx::array &Mask, std::vector<vlm::BaseCache *> *Cache,
-               const std::optional<mx::array> &AspectRatioIds,
-               const std::optional<mx::array> &AspectRatioMask,
-               const std::optional<mx::array> &CrossAttentionMask) {
+std::tuple<mx::array, std::optional<mx::array>> Model::forward(
+    const mx::array &InputIds, const mx::array &PixelValues,
+    const mx::array &Mask,
+    const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache,
+    const std::optional<mx::array> &AspectRatioIds,
+    const std::optional<mx::array> &AspectRatioMask,
+    const std::optional<mx::array> &CrossAttentionMask) {
 
   mx::array CrossAttentionStates = mx::array({});
   if (PixelValues.size() != 0) {
@@ -108,11 +109,11 @@ Model::forward(const mx::array &InputIds, const mx::array &PixelValues,
     FullTextRowMaskedOutMask =
         take(FullTextRowMaskedOutMask, {CachePosition}, 2);
   }
-  auto Outputs =
+  auto [Logits, ReCrossAttentionStates] =
       std::dynamic_pointer_cast<LanguageModel>(Submodules["language_model"])
           ->forward(InputIds, Mask, CrossAttentionStates, CrossAttnMask,
                     FullTextRowMaskedOutMask, mx::array({}), Cache);
-  return {Outputs.Logits, Outputs.CrossAttentionStates};
+  return {Logits, ReCrossAttentionStates};
 }
 
 std::pair<mx::array, mx::array>

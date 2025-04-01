@@ -45,7 +45,7 @@ public:
   forward(const mx::array &HiddenStates,
           const std::optional<mx::array> &CrossAttentionStates = std::nullopt,
           const std::optional<mx::array> &AttentionMask = std::nullopt,
-          vlm::BaseCache *Cache = nullptr);
+          std::shared_ptr<vlm::BaseCache> Cache = nullptr);
 
 private:
   TextConfig Config;
@@ -65,7 +65,7 @@ public:
 
   mx::array forward(const mx::array &X,
                     const std::optional<mx::array> &Mask = std::nullopt,
-                    vlm::BaseCache *Cache = nullptr);
+                    std::shared_ptr<vlm::BaseCache> Cache = nullptr);
 
 private:
   TextConfig Config;
@@ -93,7 +93,7 @@ public:
 
   mx::array forward(const mx::array &HiddenStates,
                     const std::optional<mx::array> &Mask = std::nullopt,
-                    vlm::BaseCache *Cache = nullptr);
+                    std::shared_ptr<vlm::BaseCache> Cache = nullptr);
 
 private:
   int HiddenSize;
@@ -108,7 +108,7 @@ public:
       const mx::array &HiddenStates, const mx::array &CrossAttentionStates,
       const std::optional<mx::array> &AttentionMask = std::nullopt,
       const std::optional<mx::array> &FullTextRowMaskedOutMask = std::nullopt,
-      vlm::BaseCache *Cache = nullptr);
+      std::shared_ptr<vlm::BaseCache> Cache = nullptr);
 
 private:
   int HiddenSize;
@@ -129,7 +129,8 @@ public:
       const std::optional<mx::array> &CrossAttentionMask = std::nullopt,
       const std::optional<mx::array> &FullTextRowMaskedOutMask = std::nullopt,
       const std::optional<mx::array> &InputsEmbeds = std::nullopt,
-      std::vector<vlm::BaseCache *> *Cache = nullptr);
+      const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache =
+          std::nullopt);
 
 private:
   TextConfig Config;
@@ -143,31 +144,34 @@ public:
   }
 };
 
-struct LanguageModelOutput {
-  mx::array Logits;
-  std::optional<mx::array> CrossAttentionStates;
-};
-
-class LanguageModel : public nn::Module {
+class LanguageModel : public vlm::LanguageModel {
 public:
   LanguageModel(const TextConfig &Config);
   virtual ~LanguageModel() = default;
-
-  LanguageModelOutput forward(
-      const std::optional<mx::array> &InputIds = std::nullopt,
+  std::tuple<mx::array, std::optional<mx::array>> forward(
+      const mx::array &Inputs,
+      const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache =
+          std::nullopt) override {
+    return forward(Inputs, std::nullopt, std::nullopt, std::nullopt,
+                   std::nullopt, std::nullopt, Cache);
+  };
+  std::tuple<mx::array, std::optional<mx::array>> forward(
+      const std::optional<mx::array> &InputIds,
       const std::optional<mx::array> &Mask = std::nullopt,
       const std::optional<mx::array> &CrossAttentionStates = std::nullopt,
       const std::optional<mx::array> &CrossAttentionMask = std::nullopt,
       const std::optional<mx::array> &FullTextRowMaskedOutMask = std::nullopt,
       const std::optional<mx::array> &InputsEmbeds = std::nullopt,
-      std::vector<vlm::BaseCache *> *Cache = nullptr);
+      const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache =
+          std::nullopt);
 
   static std::unordered_map<std::string, mx::array>
   sanitize(const std::unordered_map<std::string, mx::array> &Weights);
 
   // const std::vector<std::unique_ptr<nn::Module>> &layers() const;
-  int headDim() const;
-  int nKvHeads() const;
+  int headDim() const override;
+  int nKvHeads() const override;
+  int layers() const override;
 
 private:
   TextConfig Config;

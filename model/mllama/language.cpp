@@ -105,7 +105,8 @@ MllamaTextCrossAttention::MllamaTextCrossAttention(const TextConfig &Config,
 mx::array MllamaTextCrossAttention::forward(
     const mx::array &HiddenStates,
     const std::optional<mx::array> &CrossAttentionStates,
-    const std::optional<mx::array> &AttentionMask, vlm::BaseCache *Cache) {
+    const std::optional<mx::array> &AttentionMask,
+    std::shared_ptr<vlm::BaseCache> Cache) {
   auto Shape = HiddenStates.shape();
   int BatchSize = Shape[0];
   int QLen = Shape[1];
@@ -135,7 +136,7 @@ mx::array MllamaTextCrossAttention::forward(
                     ->forward(KeyStates);
   } else if (Cache != nullptr && Cache->Offset > 0) {
     std::tie(KeyStates, ValueStates) =
-        dynamic_cast<vlm::KVCache *>(Cache)->fetch();
+        std::dynamic_pointer_cast<vlm::KVCache>(Cache)->fetch();
   } else {
     auto Splits = mx::split(Query, 2, 1);
     KeyStates = Splits[0];
@@ -179,9 +180,10 @@ MllamaTextSelfAttention::MllamaTextSelfAttention(const TextConfig &Config,
                      HeadDim, Config.RopeTraditional, Config.RopeTheta, 1)));
 }
 
-mx::array MllamaTextSelfAttention::forward(const mx::array &X,
-                                           const std::optional<mx::array> &Mask,
-                                           vlm::BaseCache *Cache) {
+mx::array
+MllamaTextSelfAttention::forward(const mx::array &X,
+                                 const std::optional<mx::array> &Mask,
+                                 std::shared_ptr<vlm::BaseCache> Cache) {
   auto Shape = X.shape();
   int BatchSize = Shape[0];
   int QLen = Shape[1];
@@ -264,10 +266,9 @@ MllamaSelfAttentionDecoderLayer::MllamaSelfAttentionDecoderLayer(
                      nn::RMSNorm(Config.HiddenSize, Config.RmsNormEps)));
 }
 
-mx::array
-MllamaSelfAttentionDecoderLayer::forward(const mx::array &HiddenStates,
-                                         const std::optional<mx::array> &Mask,
-                                         vlm::BaseCache *Cache) {
+mx::array MllamaSelfAttentionDecoderLayer::forward(
+    const mx::array &HiddenStates, const std::optional<mx::array> &Mask,
+    std::shared_ptr<vlm::BaseCache> Cache) {
   mx::array Residual = HiddenStates;
   mx::array Normed =
       std::dynamic_pointer_cast<nn::RMSNorm>(Submodules["input_layernorm"])
@@ -305,7 +306,7 @@ mx::array MllamaCrossAttentionDecoderLayer::forward(
     const mx::array &HiddenStates, const mx::array &CrossAttentionStates,
     const std::optional<mx::array> &AttentionMask,
     const std::optional<mx::array> &FullTextRowMaskedOutMask,
-    vlm::BaseCache *Cache) {
+    std::shared_ptr<vlm::BaseCache> Cache) {
   mx::array Residual = HiddenStates;
   mx::array Normed =
       std::dynamic_pointer_cast<nn::RMSNorm>(Submodules["input_layernorm"])
@@ -360,7 +361,7 @@ mx::array MllamaTextModel::forward(
     const std::optional<mx::array> &CrossAttentionMask,
     const std::optional<mx::array> &FullTextRowMaskedOutMask,
     const std::optional<mx::array> &InputsEmbeds,
-    std::vector<vlm::BaseCache *> *Cache) {
+    const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache) {
   mx::array InputsEmbedsLocal = mx::array({});
   int BatchSize, SeqLength;
   if (InputIds.has_value() && InputsEmbeds.has_value()) {
@@ -396,8 +397,9 @@ mx::array MllamaTextModel::forward(
   mx::array MaskLocal = vlm::createAttentionMask(HiddenStates);
 
   for (size_t Idx = 0; Idx < Layers.size(); ++Idx) {
-    vlm::BaseCache *LayerCache =
-        (Cache != nullptr && Idx < Cache->size()) ? (*Cache)[Idx] : nullptr;
+    std::shared_ptr<vlm::BaseCache> LayerCache =
+        (Cache.has_value() && Idx < Cache.value().size()) ? (Cache.value())[Idx]
+                                                          : nullptr;
     bool IsCross = std::find(Config.CrossAttentionLayers.begin(),
                              Config.CrossAttentionLayers.end(),
                              Idx) != Config.CrossAttentionLayers.end();
@@ -425,14 +427,14 @@ LanguageModel::LanguageModel(const TextConfig &Config) : Config(Config) {
                                 Config.HiddenSize, Config.VocabSize, false)));
 }
 
-LanguageModelOutput
-LanguageModel::forward(const std::optional<mx::array> &InputIds,
-                       const std::optional<mx::array> &Mask,
-                       const std::optional<mx::array> &CrossAttentionStates,
-                       const std::optional<mx::array> &CrossAttentionMask,
-                       const std::optional<mx::array> &FullTextRowMaskedOutMask,
-                       const std::optional<mx::array> &InputsEmbeds,
-                       std::vector<vlm::BaseCache *> *Cache) {
+std::tuple<mx::array, std::optional<mx::array>> LanguageModel::forward(
+    const std::optional<mx::array> &InputIds,
+    const std::optional<mx::array> &Mask,
+    const std::optional<mx::array> &CrossAttentionStates,
+    const std::optional<mx::array> &CrossAttentionMask,
+    const std::optional<mx::array> &FullTextRowMaskedOutMask,
+    const std::optional<mx::array> &InputsEmbeds,
+    const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache) {
   mx::array HiddenStates =
       std::dynamic_pointer_cast<MllamaTextModel>(Submodules["model"])
           ->forward(InputIds, Mask, std::nullopt, CrossAttentionStates,
@@ -441,8 +443,7 @@ LanguageModel::forward(const std::optional<mx::array> &InputIds,
   mx::array Logits =
       std::dynamic_pointer_cast<nn::Linear>(Submodules["lm_head"])
           ->forward(HiddenStates);
-  LanguageModelOutput Output{Logits, CrossAttentionStates};
-  return Output;
+  return {Logits, CrossAttentionStates};
 }
 
 std::unordered_map<std::string, mx::array> LanguageModel::sanitize(
@@ -456,15 +457,11 @@ std::unordered_map<std::string, mx::array> LanguageModel::sanitize(
   return Sanitized;
 }
 
-// const std::vector<std::unique_ptr<nn::Module>> &LanguageModel::layers() const
-// {
-//   return Model->getLayers();
-// }
-
 int LanguageModel::headDim() const {
   return Config.HiddenSize / Config.NumAttentionHeads;
 }
 
 int LanguageModel::nKvHeads() const { return Config.NumKeyValueHeads; }
+int LanguageModel::layers() const { return Config.NumHiddenLayers; }
 
 } // namespace mllama
