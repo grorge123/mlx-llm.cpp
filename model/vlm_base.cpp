@@ -1,8 +1,13 @@
 #include "vlm_base.h"
 #include "base.h"
+#include "vlm_sampling.h"
+#include <ctime>
+#include <memory>
 #include <mlx/array.h>
 #include <mlx/ops.h>
+#include <mlx/transforms.h>
 #include <stdexcept>
+#include <tuple>
 #include <vector>
 
 namespace vlm {
@@ -309,17 +314,17 @@ mx::array createAdditiveCausalMask(int N, int Offset) {
   return mx::less(mx::expand_dims(Linds, 1), mx::expand_dims(Rinds, 0));
 }
 
-mx::array
-createAttentionMask(mx::array H,
-                    std::optional<std::vector<vlm::BaseCache *>> Cache) {
+mx::array createAttentionMask(
+    mx::array H,
+    std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> Cache) {
   int T = H.shape()[1];
   mx::array Mask = mx::array({});
   if (T > 1) {
     int Offset = 0;
     if (Cache.has_value() && Cache.value().size() > 0 &&
         Cache.value()[0] != nullptr) {
-      auto *C = Cache.value()[0];
-      auto *RotCache = dynamic_cast<RotatingKVCache *>(C);
+      auto C = Cache.value()[0];
+      auto RotCache = std::dynamic_pointer_cast<RotatingKVCache>(C);
       if (RotCache) {
         Offset = std::min(RotCache->MaxSize - 1, RotCache->Offset);
       } else {
@@ -332,4 +337,192 @@ createAttentionMask(mx::array H,
   return Mask;
 }
 
+std::string
+generate(vlm::Module *Model, void *Processor, const std::string &Prompt,
+         std::optional<std::string> Image, bool Verbose,
+         std::map<std::string, std::variant<mx::array, int, float, std::string>>
+             Kwargs) {
+
+  if (Verbose) {
+    std::cout << "==========" << std::endl;
+    if (Image.has_value()) {
+      std::cout << "Files: " << Image.value() << std::endl << std::endl;
+    } else if (Kwargs.count("Video") > 0) {
+      /* Print video path */
+    }
+    std::cout << "Prompt: " << Prompt << std::endl;
+  }
+
+  std::string Text = "";
+  // stream generate
+  int ImageTokenIndex;
+  mx::array InputIds = mx::array({});
+  mx::array PixelValues = mx::array({});
+  mx::array Mask = mx::array({});
+
+  auto ImageTokenIndexIt = Kwargs.find("ImageTokenIndex");
+  if (ImageTokenIndexIt != Kwargs.end()) {
+    if (auto *ImageTokenIndexPtr =
+            std::get_if<int>(&ImageTokenIndexIt->second)) {
+      ImageTokenIndex = *ImageTokenIndexPtr;
+    } else {
+      // 处理键存在，但类型不匹配的情况
+    }
+  } else {
+    assumingUnreachable();
+  }
+  if (Kwargs.count("pixel_values") > 0) {
+    spdlog::error("Not implemented");
+    assumingUnreachable();
+  } else {
+    InputIds = *std::get_if<mx::array>(&Kwargs.find("input_ids")->second);
+    PixelValues = *std::get_if<mx::array>(&Kwargs.find("pixel_values")->second);
+    Mask = *std::get_if<mx::array>(&Kwargs.find("mask")->second);
+  }
+  // Generate_state
+  // Initialize cache
+  std::vector<std::shared_ptr<BaseCache>> Cache;
+  int MaxTokens = 256;
+  float Temperature = 0.0f;
+  std::optional<float> RepetitionPenalty = std::nullopt;
+  int RepetitionContextSize = 20;
+  float TopP = 1.0f;
+  std::map<int, float> LogitBias = {};
+  auto LanguageModel = std::dynamic_pointer_cast<vlm::LanguageModel>(
+      Model->Submodules["language_model"]);
+
+  auto Sample = [&](mx::array Logits) -> std::tuple<mx::array, mx::array> {
+    if (!LogitBias.empty()) {
+      for (const auto &[Index, Value] : LogitBias) {
+        Logits = mlx::core::scatter_add_axis(Logits, mx::array({Index}),
+                                             mx::array({Value}), 1);
+      }
+    }
+
+    mx::array LogProbs = Logits - mx::logsumexp(Logits, -1);
+    mx::array Token = mx::array({});
+    if (Temperature == 0.0f) {
+      Token = mx::argmax(Logits, -1);
+    } else {
+      if (TopP > 0 and TopP < 1.0) {
+        Token = topPSampling(Logits, TopP, Temperature);
+      } else {
+        Token = mx::random::categorical(Logits / Temperature);
+      }
+    }
+
+    return {Token, LogProbs};
+  };
+
+  if (RepetitionPenalty.has_value() && RepetitionPenalty < 0) {
+    spdlog::error("Repetition penalty must be greater than 0");
+    assumingUnreachable();
+  }
+
+  if (LanguageModel->ImplementMackCache) {
+    auto MakeCache = LanguageModel->makeCache();
+    Cache.insert(Cache.begin(), MakeCache.begin(), MakeCache.end());
+  } else {
+    int HeadDim = LanguageModel->headDim();
+    auto KVHeads = LanguageModel->nKvHeads();
+    for (int I = 0; I < LanguageModel->layers(); ++I) {
+      Cache.emplace_back(std::make_shared<KVCache>(HeadDim, KVHeads));
+    }
+  }
+
+  // Initialize repetition context
+  auto FlatternInputIdsShape = reshape(InputIds, {-1});
+  std::vector<int> RepetitionContext(FlatternInputIdsShape.data<int>(),
+                                     FlatternInputIdsShape.data<int>() +
+                                         InputIds.size());
+  if (RepetitionContext.size() > RepetitionContextSize) {
+    RepetitionContext.erase(RepetitionContext.begin(),
+                            RepetitionContext.end() - RepetitionContextSize);
+  }
+
+  auto Step = [&](mx::array Y) -> std::tuple<mx::array, mx::array> {
+    auto Outputs = std::dynamic_pointer_cast<vlm::LanguageModel>(
+                       Model->Submodules["language_model"])
+                       ->forward(Y, Cache);
+    mx::array Logits = take(std::get<0>(Outputs), {-1}, -1);
+    mx::array LogProbs = mx::array({});
+    if (RepetitionPenalty.has_value()) {
+      if (RepetitionContext.size() > 0) {
+        auto Indices = mx::array(RepetitionContext.data(),
+                                 {static_cast<int>(RepetitionContext.size())});
+        auto SelectedLogits = take(Logits, Indices, 1);
+        SelectedLogits = mlx::core::where(
+            SelectedLogits < 0, SelectedLogits * RepetitionPenalty.value(),
+            SelectedLogits / RepetitionPenalty.value());
+        mlx::core::put_along_axis(Logits, Indices, SelectedLogits, 1);
+      }
+      std::tie(Y, LogProbs) = Sample(Logits);
+      RepetitionContext.emplace_back(Y.item<int>());
+    } else {
+      std::tie(Y, LogProbs) = Sample(Logits);
+    }
+    if (RepetitionContext.size() > RepetitionContextSize) {
+      RepetitionContext.erase(RepetitionContext.begin(),
+                              RepetitionContext.end() - RepetitionContextSize);
+    }
+    return {Y, mlx::core::squeeze(LogProbs, 0)};
+  };
+
+  // Perform the first step
+  auto Outputs = Model->forward(InputIds, PixelValues, Mask, Cache);
+  mx::array Logits = take(std::get<0>(Outputs), {-1}, -1);
+  auto [Y, LogProbs] = Sample(Logits);
+  mx::async_eval(Y);
+  // TODO: handle cross_attention_states, encoder_outputs
+  // End generate_state
+
+  std::optional<GenerationResult> Result;
+  GenerationResult LastResponse;
+  auto Tic = std::chrono::system_clock::now().time_since_epoch();
+
+  int N = 0;
+  while (true) {
+    int PromptTPS;
+    if (N == 0) {
+      PromptTPS = std::chrono::duration_cast<std::chrono::seconds>(Tic).count();
+      Tic = std::chrono::system_clock::now().time_since_epoch();
+    }
+    // TODO: if token = eos_token_id break
+    // TODO: detokenize token
+    auto Response = GenerationResult();
+    if (Verbose) {
+      std::cout << Response.Text << std::flush;
+    }
+    Text += Response.Text;
+    LastResponse = Response;
+    N++;
+    if (N >= MaxTokens) {
+      break;
+    }
+    auto [NextY, NextLogProbs] = Step(Y);
+    mx::async_eval(NextY);
+    // TODO: handle decoder_input_ids
+    auto Token = Y.item<int>();
+    Y = NextY;
+    LogProbs = NextLogProbs;
+  }
+
+  // end stream generate
+  if (Verbose) {
+    std::cout << std::endl << "==========" << std::endl;
+    if (Text.empty()) {
+      std::cout << "No text generated for this prompt" << std::endl;
+      return Text;
+    }
+
+    std::cout << "Prompt: " << LastResponse.PromptTokens << " tokens, "
+              << LastResponse.PromptTps << " tokens-per-sec" << std::endl;
+    std::cout << "Generation: " << LastResponse.GenerationTokens << " tokens, "
+              << LastResponse.GenerationTps << " tokens-per-sec" << std::endl;
+    std::cout << "Peak memory: " << LastResponse.PeakMemory << " GB"
+              << std::endl;
+  }
+
+  return Text;
+}
 } // namespace vlm

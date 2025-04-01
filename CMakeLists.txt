@@ -33,6 +33,7 @@ add_library(
   model/converter.cpp
   model/utils.cpp
   model/vlm_base.cpp
+  model/vlm_sampling.cpp
   mlx/base.cpp
   mlx/linear.cpp
   mlx/convolution.cpp

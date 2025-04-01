@@ -1,14 +1,15 @@
 #pragma once
 #include "base.h"
+#include <map>
 #include <mlx/array.h>
 #include <optional>
 #include <sstream>
+#include <string>
 #include <tuple>
 #include <utility>
 #include <vector>
 
 namespace vlm {
-
 class BaseCache {
 public:
   int Offset = 0;
@@ -26,6 +27,28 @@ public:
 
   virtual bool isTrimmable() const;
   virtual int trim(int N);
+};
+class Module : public mlx::core::nn::Module {
+public:
+  virtual std::tuple<mx::array, std::optional<mx::array>> forward(
+      const mx::array &InputIds, const mx::array &PixelValues,
+      const mx::array &Mask,
+      const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache =
+          std::nullopt) = 0;
+};
+class LanguageModel : public mlx::core::nn::Module {
+public:
+  virtual int headDim() const = 0;
+  virtual int nKvHeads() const = 0;
+  virtual int layers() const = 0;
+  virtual std::vector<std::shared_ptr<BaseCache>> makeCache() {
+    assumingUnreachable();
+  }
+  virtual std::tuple<mx::array, std::optional<mx::array>> forward(
+      const mx::array &Inputs,
+      const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache =
+          std::nullopt) = 0;
+  bool ImplementMackCache = false;
 };
 
 class KVCache : public BaseCache {
@@ -84,7 +107,58 @@ public:
 };
 
 mx::array createAttentionMask(
-    mx::array H, std::optional<std::vector<vlm::BaseCache *>> = std::nullopt);
+    mx::array H,
+    std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> = std::nullopt);
 
 mx::array createAdditiveCausalMask(int N, int Offset = 0);
+
+struct GenerationResult {
+  std::string Text;
+  int Token;
+  std::vector<float> LogProbs;
+  int PromptTokens;
+  int GenerationTokens;
+  float PromptTps;
+  float GenerationTps;
+  float PeakMemory;
+};
+
+// Add this struct to hold generation state
+struct StreamGenerationState {
+  void *Model;
+  void *Processor;
+  mx::array PromptTokens;
+  mx::array InputIds;
+  mx::array PixelValues;
+  mx::array Mask;
+  mx::array CurrentToken;
+  std::vector<float> CurrentLogProbs;
+  int TokenCount;
+  double StartTime;
+  double PromptTime;
+  float PromptTps;
+  bool IsComplete;
+  std::map<std::string, mx::array> Kwargs;
+
+  // Generation parameters
+  int MaxTokens = 256;
+  float Temperature = 0.0;
+  std::optional<float> RepetitionPenalty = std::nullopt;
+  std::optional<int> RepetitionContextSize = 20;
+  float TopP = 1.0;
+  std::map<int, float> LogitBias;
+
+  // State for generate_step
+  std::vector<int> RepetitionContext;
+  std::vector<void *> Cache; // Will hold appropriate cache objects
+  mx::array CrossAttentionStates;
+  mx::array EncoderOutputs;
+};
+
+std::string
+generate(vlm::Module *Model, void *Processor, const std::string &Prompt,
+         std::optional<std::string> Image = std::nullopt, bool Verbose = false,
+         std::map<std::string, std::variant<mx::array, float, int, std::string>>
+             Kwargs = {});
+
 } // namespace vlm
