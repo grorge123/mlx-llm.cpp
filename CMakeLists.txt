@@ -56,6 +56,7 @@ target_compile_options(
           -Wextra
           -Wpedantic
           -Werror
+          -Wnounused-const-variable
           -fsanitize=undefined
           -fsanitize=address
           -g)

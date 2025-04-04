@@ -109,8 +109,10 @@ Model::getInputEmbeddings(const mx::array &InputIds,
           ->forward(astype(transpose(PixelValues, {0, 2, 3, 1}),
                            InputsEmbeds.dtype()),
                     true);
+  auto NewShape = HiddenState.shape();
+  NewShape.insert(NewShape.begin(), 1);
   mx::array ImageFeatures =
-      astype(take(HiddenState, {}, 0), PixelValues.dtype());
+      astype(reshape(HiddenState, NewShape), PixelValues.dtype());
   ImageFeatures = std::dynamic_pointer_cast<Gemma3MultiModalProjector>(
                       Submodules["multi_modal_projector"])
                       ->forward(ImageFeatures);
@@ -163,7 +165,7 @@ std::tuple<mx::array, std::optional<mx::array>> Model::forward(
   auto Pair = getInputEmbeddings(InputIds, PixelValues, Mask);
   mx::array InputEmbeds = Pair.first;
   auto Logits =
-      std::dynamic_pointer_cast<LanguageModel>(Submodules["language_model"])
+      std::dynamic_pointer_cast<gemma3::LanguageModel>(Submodules["language_model"])
           ->forward(InputIds, InputEmbeds, Mask, Cache);
   return Logits;
 }

@@ -338,7 +338,7 @@ mx::array createAttentionMask(
 }
 
 std::string
-generate(vlm::Module *Model, void *Processor, const std::string &Prompt,
+generate(std::shared_ptr<vlm::Module> Model, const std::string &Prompt,
          std::optional<std::string> Image, bool Verbose,
          std::map<std::string, std::variant<mx::array, int, float, std::string>>
              Kwargs) {
@@ -360,7 +360,7 @@ generate(vlm::Module *Model, void *Processor, const std::string &Prompt,
   mx::array PixelValues = mx::array({});
   mx::array Mask = mx::array({});
 
-  auto ImageTokenIndexIt = Kwargs.find("ImageTokenIndex");
+  auto ImageTokenIndexIt = Kwargs.find("image_token_index");
   if (ImageTokenIndexIt != Kwargs.end()) {
     if (auto *ImageTokenIndexPtr =
             std::get_if<int>(&ImageTokenIndexIt->second)) {
@@ -371,7 +371,7 @@ generate(vlm::Module *Model, void *Processor, const std::string &Prompt,
   } else {
     assumingUnreachable();
   }
-  if (Kwargs.count("pixel_values") > 0) {
+  if (Kwargs.count("pixel_values") == 0) {
     spdlog::error("Not implemented");
     assumingUnreachable();
   } else {
@@ -432,6 +432,7 @@ generate(vlm::Module *Model, void *Processor, const std::string &Prompt,
 
   // Initialize repetition context
   auto FlatternInputIdsShape = reshape(InputIds, {-1});
+  mx::async_eval(FlatternInputIdsShape);
   std::vector<int> RepetitionContext(FlatternInputIdsShape.data<int>(),
                                      FlatternInputIdsShape.data<int>() +
                                          InputIds.size());
@@ -444,7 +445,8 @@ generate(vlm::Module *Model, void *Processor, const std::string &Prompt,
     auto Outputs = std::dynamic_pointer_cast<vlm::LanguageModel>(
                        Model->Submodules["language_model"])
                        ->forward(Y, Cache);
-    mx::array Logits = take(std::get<0>(Outputs), {-1}, -1);
+    mx::array Logits = std::get<0>(Outputs);
+    Logits = take(Logits, {Logits.shape()[1]}, 1);
     mx::array LogProbs = mx::array({});
     if (RepetitionPenalty.has_value()) {
       if (RepetitionContext.size() > 0) {
@@ -470,7 +472,8 @@ generate(vlm::Module *Model, void *Processor, const std::string &Prompt,
 
   // Perform the first step
   auto Outputs = Model->forward(InputIds, PixelValues, Mask, Cache);
-  mx::array Logits = take(std::get<0>(Outputs), {-1}, -1);
+  mx::array Logits = std::get<0>(Outputs);
+  Logits = take(Logits, {Logits.shape()[1] - 1}, 1);
   auto [Y, LogProbs] = Sample(Logits);
   mx::async_eval(Y);
   // TODO: handle cross_attention_states, encoder_outputs

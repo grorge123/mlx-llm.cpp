@@ -9,7 +9,6 @@
 #include <memory>
 #include <mlx/array.h>
 #include <mlx/ops.h>
-#include <stdexcept>
 #include <vector>
 
 namespace gemma3 {
@@ -140,19 +139,14 @@ mx::array Attention::forward(
                                     {B, L, -1}),
                             {0, 2, 1}));
   }
-  return Mask.has_value()
-             ? std::dynamic_pointer_cast<nn::Linear>(Submodules["o_proj"])
-                   ->forward(transpose(
-                       reshape(mx::fast::scaled_dot_product_attention(
-                                   Queries, Keys, Values, Scale, Mask.value()),
-                               {B, L, -1}),
-                       {0, 2, 1}))
-             : std::dynamic_pointer_cast<nn::Linear>(Submodules["o_proj"])
-                   ->forward(
-                       transpose(reshape(mx::fast::scaled_dot_product_attention(
-                                             Queries, Keys, Values, Scale),
-                                         {B, L, -1}),
-                                 {0, 2, 1}));
+  auto Output = (Mask.has_value()
+                     ? mx::fast::scaled_dot_product_attention(
+                           Queries, Keys, Values, Scale, Mask.value())
+                     : mx::fast::scaled_dot_product_attention(Queries, Keys,
+                                                              Values, Scale));
+  Output = reshape(transpose(Output, {0, 2, 1, 3}), {B, L, -1});
+  return std::dynamic_pointer_cast<nn::Linear>(Submodules["o_proj"])
+      ->forward(Output);
 }
 
 MLP::MLP(int Dim, int HiddenDim) {
@@ -207,7 +201,7 @@ mx::array TransformerBlock::forward(
                         ->forward(R);
   R = std::dynamic_pointer_cast<MLP>(Submodules["mlp"])
           ->forward(std::dynamic_pointer_cast<gemma3::RMSNorm>(
-                        Submodules["pre_feedforward_layer_norm"])
+                        Submodules["pre_feedforward_layernorm"])
                         ->forward(H));
   return H + std::dynamic_pointer_cast<gemma3::RMSNorm>(
                  Submodules["post_feedforward_layernorm"])
@@ -266,7 +260,7 @@ mx::array Gemma3Model::forward(
     H = dynamic_cast<TransformerBlock *>(Layers[I].get())
             ->forward(H, MaskLocal, CacheValue[I]);
   }
-  return std::dynamic_pointer_cast<nn::RMSNorm>(Submodules["norm"])->forward(H);
+  return std::dynamic_pointer_cast<gemma3::RMSNorm>(Submodules["norm"])->forward(H);
 }
 
 LanguageModel::LanguageModel(const TextConfig &Config) : Config(Config) {

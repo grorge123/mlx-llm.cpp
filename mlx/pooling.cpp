@@ -36,7 +36,7 @@ mx::array nonOverlappingSlidingWindows(const mx::array &X,
                                        const std::vector<int> &WindowShape) {
   std::vector<int> NewShape;
   NewShape.push_back(Shape[0]);
-  for (size_t I = 1; I < Shape.size(); I++) {
+  for (size_t I = 1; I < std::min(Shape.size(), WindowShape.size() + 1); I++) {
     int S = Shape[I];
     int W = WindowShape[I - 1];
     NewShape.push_back(S / W);
@@ -147,8 +147,14 @@ Pool2d::Pool2d(
     int PaddingValue, const std::vector<int> &KernelSize,
     const std::optional<std::vector<int>> &StrideOpt,
     const std::optional<std::vector<int>> &PaddingOpt)
-    : Pool(PoolingFunction, KernelSize,
-           (StrideOpt.has_value() ? StrideOpt.value() : KernelSize),
+    : Pool(PoolingFunction,
+           KernelSize.size() == 1 ? valueOrList(KernelSize[0], 2) : KernelSize,
+           (StrideOpt.has_value()
+                ? (StrideOpt.value().size() == 1
+                       ? valueOrList(StrideOpt.value()[0], 2)
+                       : StrideOpt.value())
+                : (KernelSize.size() == 1 ? valueOrList(KernelSize[0], 2)
+                                          : KernelSize)),
            makePaddingPairs(PaddingOpt.has_value() ? PaddingOpt.value()
                                                    : valueOrList(0, 2)),
            PaddingValue) {}

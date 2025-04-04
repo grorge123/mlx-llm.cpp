@@ -156,9 +156,9 @@ struct StreamGenerationState {
 };
 
 std::string
-generate(vlm::Module *Model, void *Processor, const std::string &Prompt,
+generate(std::shared_ptr<vlm::Module> Model, const std::string &Prompt = {},
          std::optional<std::string> Image = std::nullopt, bool Verbose = false,
-         std::map<std::string, std::variant<mx::array, float, int, std::string>>
+         std::map<std::string, std::variant<mx::array, int, float, std::string>>
              Kwargs = {});
 
 } // namespace vlm

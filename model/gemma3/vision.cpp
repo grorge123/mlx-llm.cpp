@@ -171,6 +171,7 @@ Encoder::forward(const mx::array &X,
       EncoderStates.push_back(Out);
     H = Out;
   }
+  H = take(H, {0}, 0);
   return {H, EncoderStates};
 }
 
