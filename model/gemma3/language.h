@@ -46,10 +46,10 @@ private:
 class Attention : public nn::Module {
 public:
   Attention(const TextConfig &Config, int LayerIdx);
-  mx::array
-  forward(const mx::array &X,
-          const std::optional<mx::array> &Mask = std::nullopt,
-          const std::optional<std::shared_ptr<vlm::BaseCache>> &Cache = std::nullopt);
+  mx::array forward(const mx::array &X,
+                    const std::optional<mx::array> &Mask = std::nullopt,
+                    const std::optional<std::shared_ptr<vlm::BaseCache>>
+                        &Cache = std::nullopt);
 
 private:
   int NHeads;
@@ -72,10 +72,10 @@ public:
 class TransformerBlock : public nn::Module {
 public:
   TransformerBlock(const TextConfig &Config, int LayerIdx);
-  mx::array
-  forward(const mx::array &X,
-          const std::optional<mx::array> &Mask = std::nullopt,
-          const std::optional<std::shared_ptr<vlm::BaseCache>> &Cache = std::nullopt);
+  mx::array forward(const mx::array &X,
+                    const std::optional<mx::array> &Mask = std::nullopt,
+                    const std::optional<std::shared_ptr<vlm::BaseCache>>
+                        &Cache = std::nullopt);
 
 private:
   int NumAttentionHeads;
@@ -89,7 +89,8 @@ public:
       const mx::array &Inputs,
       const std::optional<mx::array> &InputsEmbeds = std::nullopt,
       const std::optional<mx::array> &Mask = std::nullopt,
-      const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache = std::nullopt);
+      const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache =
+          std::nullopt);
   std::vector<std::shared_ptr<TransformerBlock>> Layers;
   TextConfig Config;
 };
@@ -98,15 +99,17 @@ class LanguageModel : public vlm::LanguageModel {
 public:
   LanguageModel(const TextConfig &Config);
   std::tuple<mx::array, std::optional<mx::array>> forward(
-    const mx::array &Inputs,
-    const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache =
-        std::nullopt)override{return forward(Inputs, std::nullopt, std::nullopt, Cache);}
-  std::tuple<mx::array, std::optional<mx::array>>
-  forward(const mx::array &Inputs,
-          const std::optional<mx::array> &InputsEmbeds = std::nullopt,
-          const std::optional<mx::array> &Mask = std::nullopt,
-          const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache =
-              std::nullopt);
+      const mx::array &Inputs,
+      const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache =
+          std::nullopt) override {
+    return forward(Inputs, std::nullopt, std::nullopt, Cache);
+  }
+  std::tuple<mx::array, std::optional<mx::array>> forward(
+      const mx::array &Inputs,
+      const std::optional<mx::array> &InputsEmbeds = std::nullopt,
+      const std::optional<mx::array> &Mask = std::nullopt,
+      const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache =
+          std::nullopt);
   std::unordered_map<std::string, mx::array>
   sanitize(const std::unordered_map<std::string, mx::array> &Weights);
   int headDim() const override;
@@ -114,6 +117,5 @@ public:
   int layers() const override;
   std::vector<std::shared_ptr<vlm::BaseCache>> makeCache() override;
   TextConfig Config;
-  bool ImplementMackCache = true;
 };
 } // namespace gemma3

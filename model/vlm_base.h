@@ -27,28 +27,7 @@ public:
 
   virtual bool isTrimmable() const;
   virtual int trim(int N);
-};
-class Module : public mlx::core::nn::Module {
-public:
-  virtual std::tuple<mx::array, std::optional<mx::array>> forward(
-      const mx::array &InputIds, const mx::array &PixelValues,
-      const mx::array &Mask,
-      const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache =
-          std::nullopt) = 0;
-};
-class LanguageModel : public mlx::core::nn::Module {
-public:
-  virtual int headDim() const = 0;
-  virtual int nKvHeads() const = 0;
-  virtual int layers() const = 0;
-  virtual std::vector<std::shared_ptr<BaseCache>> makeCache() {
-    assumingUnreachable();
-  }
-  virtual std::tuple<mx::array, std::optional<mx::array>> forward(
-      const mx::array &Inputs,
-      const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache =
-          std::nullopt) = 0;
-  bool ImplementMackCache = false;
+  virtual std::string getType() const { return "BaseCache"; }
 };
 
 class KVCache : public BaseCache {
@@ -75,6 +54,7 @@ public:
 
   bool isTrimmable() const override;
   int trim(int N) override;
+  std::string getType() const override { return "KVCache"; }
 };
 
 class RotatingKVCache : public KVCache {
@@ -104,6 +84,35 @@ public:
 
   bool isTrimmable() const override;
   int trim(int N) override;
+  std::string getType() const override { return "RotatingKVCache"; }
+};
+
+class Module : public mlx::core::nn::Module {
+public:
+  virtual std::tuple<mx::array, std::optional<mx::array>> forward(
+      const mx::array &InputIds, const mx::array &PixelValues,
+      const mx::array &Mask,
+      const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache =
+          std::nullopt) = 0;
+};
+class LanguageModel : public mlx::core::nn::Module {
+public:
+  virtual int headDim() const = 0;
+  virtual int nKvHeads() const = 0;
+  virtual int layers() const = 0;
+  virtual std::vector<std::shared_ptr<BaseCache>> makeCache() {
+    std::vector<std::shared_ptr<BaseCache>> Cache;
+    int HeadDim = headDim();
+    auto KVHeads = nKvHeads();
+    for (int I = 0; I < layers(); ++I) {
+      Cache.emplace_back(std::make_shared<KVCache>(HeadDim, KVHeads));
+    }
+    return Cache;
+  }
+  virtual std::tuple<mx::array, std::optional<mx::array>> forward(
+      const mx::array &Inputs,
+      const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache =
+          std::nullopt) = 0;
 };
 
 mx::array createAttentionMask(

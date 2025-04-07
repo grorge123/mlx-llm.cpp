@@ -419,16 +419,8 @@ generate(std::shared_ptr<vlm::Module> Model, const std::string &Prompt,
     assumingUnreachable();
   }
 
-  if (LanguageModel->ImplementMackCache) {
-    auto MakeCache = LanguageModel->makeCache();
-    Cache.insert(Cache.begin(), MakeCache.begin(), MakeCache.end());
-  } else {
-    int HeadDim = LanguageModel->headDim();
-    auto KVHeads = LanguageModel->nKvHeads();
-    for (int I = 0; I < LanguageModel->layers(); ++I) {
-      Cache.emplace_back(std::make_shared<KVCache>(HeadDim, KVHeads));
-    }
-  }
+  auto MakeCache = LanguageModel->makeCache();
+  Cache.insert(Cache.begin(), MakeCache.begin(), MakeCache.end());
 
   // Initialize repetition context
   auto FlatternInputIdsShape = reshape(InputIds, {-1});
