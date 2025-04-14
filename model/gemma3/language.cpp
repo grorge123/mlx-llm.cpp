@@ -192,23 +192,41 @@ TransformerBlock::TransformerBlock(const TextConfig &Config, int LayerIdx)
 }
 
 mx::array TransformerBlock::forward(
-    const mx::array &X, const std::optional<mx::array> &Mask,
+    const mx::array &Input, const std::optional<mx::array> &Mask,
     const std::optional<std::shared_ptr<vlm::BaseCache>> &Cache) {
+  auto X = Input;
+  // Clip the input to avoid overflow in float16, but it make more memory usage
+  // if (X.dtype() == mx::bfloat16) {
+  //   X = mx::clip(X, mx::array{-65504}, mx::array{65504});
+  // }
   mx::array R = std::dynamic_pointer_cast<Attention>(Submodules["self_attn"])
                     ->forward(std::dynamic_pointer_cast<gemma3::RMSNorm>(
                                   Submodules["input_layernorm"])
                                   ->forward(X),
                               Mask, Cache);
-  mx::array H = X + std::dynamic_pointer_cast<gemma3::RMSNorm>(
-                        Submodules["post_attention_layernorm"])
-                        ->forward(R);
+  mx::array H = std::dynamic_pointer_cast<gemma3::RMSNorm>(
+                    Submodules["post_attention_layernorm"])
+                    ->forward(R);
+  // if (H.dtype() == mx::bfloat16) {
+  //   H = mx::clip(astype(X, mx::float32) + astype(H, mx::float32),
+  //                mx::array{-65504}, mx::array{65504});
+  // } else {
+  H = X + H;
+  // }
   R = std::dynamic_pointer_cast<MLP>(Submodules["mlp"])
           ->forward(std::dynamic_pointer_cast<gemma3::RMSNorm>(
                         Submodules["pre_feedforward_layernorm"])
                         ->forward(H));
-  return H + std::dynamic_pointer_cast<gemma3::RMSNorm>(
+  auto Out = std::dynamic_pointer_cast<gemma3::RMSNorm>(
                  Submodules["post_feedforward_layernorm"])
                  ->forward(R);
+  // if (Out.dtype() == mx::bfloat16) {
+  //   Out = clip(astype(H, mx::float32) + astype(Out, mx::float32),
+  //              mx::array{-65504}, mx::array{65504});
+  // } else {
+  Out = H + Out;
+  // }
+  return Out;
 }
 
 Gemma3Model::Gemma3Model(const TextConfig &Config) : Config(Config) {
@@ -241,8 +259,8 @@ mx::array Gemma3Model::forward(
       Cache.has_value() ? Cache.value()
                         : std::vector<std::shared_ptr<vlm::BaseCache>>(
                               Config.NumHiddenLayers, nullptr);
-  mx::array FullMask = mx::array({});
-  mx::array SlidingWindowMask = mx::array({});
+  std::optional<mx::array> FullMask = std::nullopt;
+  std::optional<mx::array> SlidingWindowMask = std::nullopt;
   if (!Mask.has_value()) {
     int J = Config.SlidingWindowPattern;
     FullMask = vlm::createAttentionMask(
@@ -253,14 +271,14 @@ mx::array Gemma3Model::forward(
   for (size_t I = 0; I < Layers.size(); I++) {
     bool IsGlobal =
         (I % Config.SlidingWindowPattern == Config.SlidingWindowPattern - 1);
-    mx::array MaskLocal = mx::array({});
+    std::optional<mx::array> MaskLocal = std::nullopt;
     if (!Mask.has_value() && IsGlobal) {
-
-      MaskLocal = SlidingWindowMask;
-    } else if (!Mask.has_value())
       MaskLocal = FullMask;
-    else
+    } else if (!Mask.has_value()) {
+      MaskLocal = SlidingWindowMask;
+    } else {
       MaskLocal = Mask.value();
+    }
     H = dynamic_cast<TransformerBlock *>(Layers[I].get())
             ->forward(H, MaskLocal, CacheValue[I]);
   }

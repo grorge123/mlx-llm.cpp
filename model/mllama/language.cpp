@@ -394,7 +394,7 @@ mx::array MllamaTextModel::forward(
   // }
 
   mx::array HiddenStates = InputsEmbedsLocal;
-  mx::array MaskLocal = vlm::createAttentionMask(HiddenStates);
+  std::optional<mx::array> MaskLocal = vlm::createAttentionMask(HiddenStates);
 
   for (size_t Idx = 0; Idx < Layers.size(); ++Idx) {
     std::shared_ptr<vlm::BaseCache> LayerCache =

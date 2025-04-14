@@ -36,12 +36,11 @@ int BaseCache::trim(int N) { return 0; }
 
 // KVCache implementation
 KVCache::KVCache(int HeadDim, int NKVHeads, int Step)
-    : NKVHeads(NKVHeads), KHeadDim(HeadDim), VHeadDim(HeadDim), Offset(0),
-      Step(Step) {}
+    : NKVHeads(NKVHeads), KHeadDim(HeadDim), VHeadDim(HeadDim), Step(Step) {}
 
 KVCache::KVCache(std::pair<int, int> HeadDims, int NKVHeads, int Step)
     : NKVHeads(NKVHeads), KHeadDim(HeadDims.first), VHeadDim(HeadDims.second),
-      Offset(0), Step(Step) {}
+      Step(Step) {}
 
 std::tuple<mx::array, mx::array>
 KVCache::updateAndFetch(const mx::array &NewKeys, const mx::array &NewValues) {
@@ -234,15 +233,15 @@ RotatingKVCache::updateInPlace(const mx::array &NewKeys,
   }
 
   // Assign
-  std::vector<int> Start(4, 0);
-  std::vector<int> End = {B, NKVHeads, Idx + S, KHeadDim};
-  std::vector<int> Stride(4, 1);
-  Start[2] = Idx;
-
-  mx::slice_update(Keys, NewKeys, Start, End, Stride);
-
-  End[3] = VHeadDim;
-  mx::slice_update(Values, NewValues, Start, End, Stride);
+  std::vector<int> KeysEnd = Keys.shape();
+  std::vector<int> Start(KeysEnd.size(), 0);
+  std::vector<int> ValuesEnd = Values.shape();
+  std::vector<int> Stride(KeysEnd.size(), 1);
+  Start[Start.size() - 2] = Idx;
+  KeysEnd[KeysEnd.size() - 2] = Idx + S;
+  ValuesEnd[KeysEnd.size() - 2] = Idx + S;
+  Keys = mx::slice_update(Keys, NewKeys, Start, KeysEnd, Stride);
+  Values = mx::slice_update(Values, NewValues, Start, ValuesEnd, Stride);
 
   Offset += S;
   Idx += S;
@@ -314,11 +313,11 @@ mx::array createAdditiveCausalMask(int N, int Offset) {
   return mx::less(mx::expand_dims(Linds, 1), mx::expand_dims(Rinds, 0)) * -1e9;
 }
 
-mx::array createAttentionMask(
+std::optional<mx::array> createAttentionMask(
     mx::array H,
     std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> Cache) {
   int T = H.shape()[1];
-  mx::array Mask = mx::array({});
+  std::optional<mx::array> Mask = std::nullopt;
   if (T > 1) {
     int Offset = 0;
     if (Cache.has_value() && Cache.value().size() > 0 &&
@@ -332,7 +331,7 @@ mx::array createAttentionMask(
       }
     }
     Mask = createAdditiveCausalMask(T, Offset);
-    Mask = mx::astype(Mask, H.dtype());
+    Mask = mx::astype(Mask.value(), H.dtype());
   }
   return Mask;
 }
@@ -434,11 +433,14 @@ generate(std::shared_ptr<vlm::Module> Model, const std::string &Prompt,
   }
 
   auto Step = [&](mx::array Y) -> std::tuple<mx::array, mx::array> {
+    std::vector<int> NewShape = Y.shape();
+    NewShape.insert(NewShape.begin(), 1);
+    // TODO: handle decoder_input_ids
     auto Outputs = std::dynamic_pointer_cast<vlm::LanguageModel>(
                        Model->Submodules["language_model"])
-                       ->forward(Y, Cache);
+                       ->forward(reshape(Y, NewShape), Cache);
     mx::array Logits = std::get<0>(Outputs);
-    Logits = take(Logits, {Logits.shape()[1]}, 1);
+    Logits = take(Logits, {Logits.shape()[1] - 1}, 1);
     mx::array LogProbs = mx::array({});
     if (RepetitionPenalty.has_value()) {
       if (RepetitionContext.size() > 0) {

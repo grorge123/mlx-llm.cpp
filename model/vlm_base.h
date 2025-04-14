@@ -37,7 +37,6 @@ public:
   int VHeadDim;
   mx::array Keys = mx::array({});
   mx::array Values = mx::array({});
-  int Offset;
   int Step;
 
   KVCache(int HeadDim, int NKVHeads, int Step = 256);
@@ -115,7 +114,7 @@ public:
           std::nullopt) = 0;
 };
 
-mx::array createAttentionMask(
+std::optional<mx::array> createAttentionMask(
     mx::array H,
     std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> = std::nullopt);
 
