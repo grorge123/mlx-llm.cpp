@@ -91,8 +91,8 @@ void KVCache::update(const mx::array &NewKeys, const mx::array &NewValues) {
   std::vector<int> Stride(End.size(), 1);
   Start[End.size() - 2] = Prev;
   End[End.size() - 2] = Offset;
-  mx::slice_update(Keys, NewKeys, Start, End, Stride);
-  mx::slice_update(Values, NewValues, Start, End, Stride);
+  Keys = mx::slice_update(Keys, NewKeys, Start, End, Stride);
+  Values = mx::slice_update(Values, NewValues, Start, End, Stride);
 }
 
 std::vector<mx::array> KVCache::getState() const {
@@ -311,7 +311,7 @@ mx::array createAdditiveCausalMask(int N, int Offset) {
     Linds = Rinds;
   }
   // mask = linds[:, None] < rinds[None]
-  return mx::less(mx::expand_dims(Linds, 1), mx::expand_dims(Rinds, 0));
+  return mx::less(mx::expand_dims(Linds, 1), mx::expand_dims(Rinds, 0)) * -1e9;
 }
 
 mx::array createAttentionMask(

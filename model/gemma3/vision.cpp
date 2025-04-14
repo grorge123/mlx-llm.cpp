@@ -116,7 +116,7 @@ VisionMLP::VisionMLP(const VisionConfig &Config) {
 mx::array VisionMLP::forward(const mx::array &X) {
   mx::array Out =
       std::dynamic_pointer_cast<nn::Linear>(Submodules["fc1"])->forward(X);
-  Out = mlx::core::gelu(Out);
+  Out = mlx::core::geluApprox(Out);
   Out = std::dynamic_pointer_cast<nn::Linear>(Submodules["fc2"])->forward(Out);
   return Out;
 }
@@ -164,14 +164,14 @@ Encoder::forward(const mx::array &X,
   std::vector<mx::array> EncoderStates;
   if (OutputHiddenStates.has_value() && OutputHiddenStates.value())
     EncoderStates.push_back(X);
+  mx::array Out = X;
   mx::array H = X;
   for (auto &L : Layers) {
-    mx::array Out = L->forward(H, Mask);
+    Out = L->forward(Out, Mask);
     if (OutputHiddenStates.has_value() && OutputHiddenStates.value())
       EncoderStates.push_back(Out);
-    H = Out;
+    H = take(Out, {0}, 0);
   }
-  H = take(H, {0}, 0);
   return {H, EncoderStates};
 }
 
@@ -194,7 +194,12 @@ mx::array VisionEmbeddings::forward(const mx::array &X) {
       std::dynamic_pointer_cast<nn::Conv2d>(Submodules["patch_embedding"])
           ->forward(X);
   PatchEmbeddings = mx::flatten(PatchEmbeddings, 1, 2);
-  mx::array PositionIds = mx::array(take(mx::arange(NumPositions), {}, 0));
+  std::vector<int64_t> PositionIdsShapeVec;
+  for (int I = 0; I < NumPositions; I++) {
+    PositionIdsShapeVec.emplace_back(I);
+  }
+  mx::array PositionIds =
+      mx::array(PositionIdsShapeVec.data(), {1, NumPositions});
   mx::array Embeddings = PatchEmbeddings;
   Embeddings = Embeddings + std::dynamic_pointer_cast<nn::Embedding>(
                                 Submodules["position_embedding"])

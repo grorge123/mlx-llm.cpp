@@ -164,9 +164,11 @@ std::tuple<mx::array, std::optional<mx::array>> Model::forward(
     const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache) {
   auto Pair = getInputEmbeddings(InputIds, PixelValues, Mask);
   mx::array InputEmbeds = Pair.first;
-  auto Logits =
-      std::dynamic_pointer_cast<gemma3::LanguageModel>(Submodules["language_model"])
-          ->forward(InputIds, InputEmbeds, Mask, Cache);
+
+  // TODO: Waiting for upstream fix Mask
+  auto Logits = std::dynamic_pointer_cast<gemma3::LanguageModel>(
+                    Submodules["language_model"])
+                    ->forward(InputIds, InputEmbeds, std::nullopt, Cache);
   return Logits;
 }
 
@@ -188,8 +190,11 @@ std::shared_ptr<Model> Model::fromPretrained(const std::string &ModelPath) {
   auto Model = std::make_shared<gemma3::Model>(gemma3::Model(ModelConfigObj));
   auto QuantResult = Obj["quantization"].get_object();
   if (!QuantResult.error()) {
-    auto GroupSize = static_cast<int>(QuantResult.value()["group_size"]);
-    auto Bits = static_cast<int>(QuantResult.value()["bits"]);
+    auto GroupSize =
+        static_cast<int>(QuantResult.value()["group_size"].get_int64());
+    auto Bits = static_cast<int>(QuantResult.value()["bits"].get_int64());
+    spdlog::info("Quantizing model to {} bits, {} group size.", Bits,
+                 GroupSize);
     Model = std::dynamic_pointer_cast<gemma3::Model>(
         Model->toQuantized(GroupSize, Bits));
   }

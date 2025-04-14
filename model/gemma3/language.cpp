@@ -71,7 +71,10 @@ RMSNorm::RMSNorm(int Dims, float Eps) : Eps(Eps) {
 }
 
 mx::array RMSNorm::forward(const mx::array &X) {
-  return mx::fast::rms_norm(X, 1.0 + Parameters.at("weight"), Eps);
+  return mx::fast::rms_norm(X,
+                            mx::array({1.0}, Parameters.at("weight").dtype()) +
+                                Parameters.at("weight"),
+                            Eps);
 }
 
 Attention::Attention(const TextConfig &Config, int LayerIdx)
@@ -110,18 +113,18 @@ mx::array Attention::forward(
       std::dynamic_pointer_cast<nn::Linear>(Submodules["k_proj"])->forward(X);
   mx::array Values =
       std::dynamic_pointer_cast<nn::Linear>(Submodules["v_proj"])->forward(X);
-  Queries = transpose(reshape(Queries, {B, L, NHeads, HeadDim}), {0, 2, 1, 3});
-  Keys = transpose(reshape(Keys, {B, L, NKVHeads, HeadDim}), {0, 2, 1, 3});
-  Values = transpose(reshape(Values, {B, L, NKVHeads, HeadDim}), {0, 2, 1, 3});
+  Queries = transpose(reshape(Queries, {B, L, NHeads, -1}), {0, 2, 1, 3});
+  Keys = transpose(reshape(Keys, {B, L, NKVHeads, -1}), {0, 2, 1, 3});
+  Values = transpose(reshape(Values, {B, L, NKVHeads, -1}), {0, 2, 1, 3});
   Queries = std::dynamic_pointer_cast<gemma3::RMSNorm>(Submodules["q_norm"])
                 ->forward(Queries);
   Keys = std::dynamic_pointer_cast<gemma3::RMSNorm>(Submodules["k_norm"])
              ->forward(Keys);
   if (Cache.has_value()) {
     Queries = std::dynamic_pointer_cast<nn::RoPE>(Submodules["rope"])
-                  ->forward(Queries, Cache.value() ? Cache.value()->Offset : 0);
+                  ->forward(Queries, Cache.value()->Offset);
     Keys = std::dynamic_pointer_cast<nn::RoPE>(Submodules["rope"])
-               ->forward(Keys, Cache.value() ? Cache.value()->Offset : 0);
+               ->forward(Keys, Cache.value()->Offset);
     std::tie(Keys, Values) = Cache.value()->updateAndFetch(Keys, Values);
   } else {
     Queries = std::dynamic_pointer_cast<nn::RoPE>(Submodules["rope"])
@@ -132,7 +135,7 @@ mx::array Attention::forward(
   if (Mask.has_value() &&
       Mask.value().shape().back() != Keys.shape().at(Keys.shape().size() - 2)) {
     mx::array M =
-        take(Mask.value(), {-Keys.shape().at(Keys.shape().size() - 2)}, -2);
+        take(Mask.value(), {-Keys.shape().at(Keys.shape().size() - 2)}, -1);
     return std::dynamic_pointer_cast<nn::Linear>(Submodules["o_proj"])
         ->forward(transpose(reshape(mx::fast::scaled_dot_product_attention(
                                         Queries, Keys, Values, Scale, M),
@@ -248,19 +251,21 @@ mx::array Gemma3Model::forward(
     SlidingWindowMask = vlm::createAttentionMask(H, CacheValue);
   }
   for (size_t I = 0; I < Layers.size(); I++) {
-    bool IsSliding =
+    bool IsGlobal =
         (I % Config.SlidingWindowPattern == Config.SlidingWindowPattern - 1);
     mx::array MaskLocal = mx::array({});
-    if (!Mask.has_value() && IsSliding)
+    if (!Mask.has_value() && IsGlobal) {
+
       MaskLocal = SlidingWindowMask;
-    else if (!Mask.has_value())
+    } else if (!Mask.has_value())
       MaskLocal = FullMask;
     else
       MaskLocal = Mask.value();
     H = dynamic_cast<TransformerBlock *>(Layers[I].get())
             ->forward(H, MaskLocal, CacheValue[I]);
   }
-  return std::dynamic_pointer_cast<gemma3::RMSNorm>(Submodules["norm"])->forward(H);
+  return std::dynamic_pointer_cast<gemma3::RMSNorm>(Submodules["norm"])
+      ->forward(H);
 }
 
 LanguageModel::LanguageModel(const TextConfig &Config) : Config(Config) {

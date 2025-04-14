@@ -20,7 +20,8 @@ std::shared_ptr<nn::Module> Module::toQuantized(int GroupSize, int Bits) {
   for (auto &[K, V] : Submodules) {
     const auto OldModule = V;
     auto Weights = V->Parameters.find("weight");
-    if(Weights != V->Parameters.end() && Weights->second.shape().back() % GroupSize != 0) {
+    if (Weights != V->Parameters.end() &&
+        Weights->second.shape().back() % GroupSize != 0) {
       continue;
     }
     V = V->toQuantized(GroupSize, Bits);
