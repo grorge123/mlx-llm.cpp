@@ -5,4 +5,5 @@
 namespace mlx::core {
 mx::array gelu(mx::array X);
 mx::array silu(mx::array X);
+mx::array geluApprox(mx::array X);
 } // namespace mlx::core

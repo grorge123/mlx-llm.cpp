@@ -51,8 +51,12 @@ Attention::forward(mx::array Input, std::optional<mx::array> Mask,
     Keys =
         std::dynamic_pointer_cast<nn::RoPE>(Submodules["rope"])->forward(Keys);
   }
-  mx::array Output = mx::fast::scaled_dot_product_attention(
-      Queries, Keys, Values, Scale, Mask);
+  mx::array Output =
+      Mask.has_value() ? mx::fast::scaled_dot_product_attention(
+                             Queries, Keys, Values, Scale, Mask.value())
+                       : mx::fast::scaled_dot_product_attention(Queries, Keys,
+                                                                Values, Scale);
+
   Output = reshape(transpose(Output, {0, 2, 1, 3}), {B, L, -1});
   return {std::dynamic_pointer_cast<nn::Linear>(Submodules["o_proj"])
               ->forward(Output),
@@ -78,7 +82,7 @@ std::tuple<mx::array, std::tuple<mx::array, mx::array>>
 TransformerBlock::forward(
     mx::array Input, std::optional<mx::array> Mask,
     std::optional<std::tuple<mx::array, mx::array>> KVCachePar) {
-  mx::array NormOutput = {};
+  mx::array NormOutput({});
   if (!Gemma) {
     NormOutput =
         std::dynamic_pointer_cast<nn::RMSNorm>(Submodules["attention_norm"])
@@ -124,8 +128,8 @@ Transformer::embed(
   std::vector<std::tuple<mx::array, mx::array>> KVCache;
   KVCache.reserve(Layers.size());
   for (size_t Idx = 0; Idx < Layers.size(); Idx++) {
-    std::tuple<mx::array, std::tuple<mx::array, mx::array>> Result = {{},
-                                                                      {{}, {}}};
+    std::tuple<mx::array, std::tuple<mx::array, mx::array>> Result = {
+        mx::array({}), {mx::array({}), mx::array({})}};
     if (KVCachePar) {
       Result = Layers[Idx]->forward(H, Mask, (*KVCachePar)[Idx]);
     } else {
@@ -151,7 +155,7 @@ Transformer::forward(
     mx::array Input,
     std::optional<std::vector<std::tuple<mx::array, mx::array>>> KVCachePar) {
   auto [X, KVCache] = embed(Input, KVCachePar, true);
-  mx::array Out = {};
+  mx::array Out({});
   if (EmbedAsHead) {
     Out =
         std::dynamic_pointer_cast<mx::nn::Embedding>(Submodules["token_embed"])
@@ -174,7 +178,7 @@ Transformer::generate(mx::array Input, std::optional<float> Temp) {
   ReshapeDim = Logits.shape();
   ReshapeDim.erase(ReshapeDim.begin() + 1);
   Logits = reshape(Logits, ReshapeDim);
-  mx::array Y = {};
+  mx::array Y({});
   if (Temp == 0) {
     Y = mx::argmax(Logits, -1);
   } else {
@@ -192,7 +196,7 @@ Transformer::nextGenerate(
   ReshapeDim.insert(ReshapeDim.begin() + 1, 1);
   auto [Logits, KVCache] = forward(reshape(Y, ReshapeDim), KVCachePar);
   Logits = squeeze(Logits, 1);
-  mx::array NextY = {};
+  mx::array NextY({});
   if (Temp == 0) {
     NextY = mx::argmax(Logits, -1);
   } else {
