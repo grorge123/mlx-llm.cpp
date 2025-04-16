@@ -1,5 +1,6 @@
 #include "vlm_base.h"
 #include "base.h"
+#include "spdlog/spdlog.h"
 #include "vlm_sampling.h"
 #include <ctime>
 #include <memory>
@@ -336,20 +337,20 @@ std::optional<mx::array> createAttentionMask(
   return Mask;
 }
 
-std::string
+std::vector<int>
 generate(std::shared_ptr<vlm::Module> Model, const std::string &Prompt,
          std::optional<std::string> Image, bool Verbose,
          std::map<std::string, std::variant<mx::array, int, float, std::string>>
              Kwargs) {
 
   if (Verbose) {
-    std::cout << "==========" << std::endl;
+    spdlog::info("==========");
     if (Image.has_value()) {
-      std::cout << "Files: " << Image.value() << std::endl << std::endl;
+      spdlog::info("Files: {}\n", Image.value());
     } else if (Kwargs.count("Video") > 0) {
       /* Print video path */
     }
-    std::cout << "Prompt: " << Prompt << std::endl;
+    spdlog::info("Prompt: {}", Prompt);
   }
 
   std::string Text = "";
@@ -476,7 +477,7 @@ generate(std::shared_ptr<vlm::Module> Model, const std::string &Prompt,
   std::optional<GenerationResult> Result;
   GenerationResult LastResponse;
   auto Tic = std::chrono::system_clock::now().time_since_epoch();
-
+  std::vector<int32_t> TokenList;
   int N = 0;
   while (true) {
     int PromptTPS;
@@ -485,13 +486,7 @@ generate(std::shared_ptr<vlm::Module> Model, const std::string &Prompt,
       Tic = std::chrono::system_clock::now().time_since_epoch();
     }
     // TODO: if token = eos_token_id break
-    // TODO: detokenize token
     auto Response = GenerationResult();
-    if (Verbose) {
-      std::cout << Response.Text << std::flush;
-    }
-    Text += Response.Text;
-    LastResponse = Response;
     N++;
     if (N >= MaxTokens) {
       break;
@@ -500,26 +495,27 @@ generate(std::shared_ptr<vlm::Module> Model, const std::string &Prompt,
     mx::async_eval(NextY);
     // TODO: handle decoder_input_ids
     auto Token = Y.item<int>();
+    TokenList.emplace_back(Token);
     Y = NextY;
     LogProbs = NextLogProbs;
   }
-
+  return TokenList;
   // end stream generate
   if (Verbose) {
-    std::cout << std::endl << "==========" << std::endl;
+    spdlog::info("\n==========");
     if (Text.empty()) {
-      std::cout << "No text generated for this prompt" << std::endl;
-      return Text;
+      spdlog::info("No text generated for this prompt");
+      return {};
+      // return Text;
     }
 
-    std::cout << "Prompt: " << LastResponse.PromptTokens << " tokens, "
-              << LastResponse.PromptTps << " tokens-per-sec" << std::endl;
-    std::cout << "Generation: " << LastResponse.GenerationTokens << " tokens, "
-              << LastResponse.GenerationTps << " tokens-per-sec" << std::endl;
-    std::cout << "Peak memory: " << LastResponse.PeakMemory << " GB"
-              << std::endl;
+    spdlog::info("Prompt: {} tokends, {} tokens-per-sec",
+                 LastResponse.PromptTokens, LastResponse.PromptTps);
+    spdlog::info("Generation: {} tokens {} tokens-per-sec",
+                 LastResponse.GenerationTokens, LastResponse.GenerationTps);
+    spdlog::info("Peak memory: {} GB");
   }
 
-  return Text;
+  // return Text;
 }
 } // namespace vlm

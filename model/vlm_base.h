@@ -163,7 +163,7 @@ struct StreamGenerationState {
   mx::array EncoderOutputs;
 };
 
-std::string
+std::vector<int>
 generate(std::shared_ptr<vlm::Module> Model, const std::string &Prompt = {},
          std::optional<std::string> Image = std::nullopt, bool Verbose = false,
          std::map<std::string, std::variant<mx::array, int, float, std::string>>

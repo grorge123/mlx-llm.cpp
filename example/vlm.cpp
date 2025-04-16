@@ -1,3 +1,4 @@
+#include "base.h"
 #include "model/converter.h"
 #include "model/gemma3/gemma3.h"
 #include "model/mllama/mllama.h"
@@ -21,7 +22,11 @@ int main() {
   Kwargs.insert({"input_ids", InputIds});
   Kwargs.insert({"pixel_values", PixelValues});
   Kwargs.insert({"mask", Mask});
-  vlm::generate(std::dynamic_pointer_cast<vlm::Module>(Model), {}, std::nullopt,
-                true, Kwargs);
+  auto ToeknList = vlm::generate(std::dynamic_pointer_cast<vlm::Module>(Model),
+                                 {}, std::nullopt, true, Kwargs);
+  for (auto &Token : ToeknList) {
+    std::cout << Token << " ";
+  }
+
   return 0;
 }
