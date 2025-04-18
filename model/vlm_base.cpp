@@ -337,11 +337,10 @@ std::optional<mx::array> createAttentionMask(
   return Mask;
 }
 
-std::vector<int>
-generate(std::shared_ptr<vlm::Module> Model, const std::string &Prompt,
-         std::optional<std::string> Image, bool Verbose,
-         std::map<std::string, std::variant<mx::array, int, float, std::string>>
-             Kwargs) {
+std::vector<int> Module::generate(
+    const std::string &Prompt, std::optional<std::string> Image, bool Verbose,
+    std::map<std::string, std::variant<mx::array, int, float, std::string>>
+        Kwargs) {
 
   if (Verbose) {
     spdlog::info("==========");
@@ -366,7 +365,6 @@ generate(std::shared_ptr<vlm::Module> Model, const std::string &Prompt,
             std::get_if<int>(&ImageTokenIndexIt->second)) {
       ImageTokenIndex = *ImageTokenIndexPtr;
     } else {
-      // 处理键存在，但类型不匹配的情况
     }
   } else {
     assumingUnreachable();
@@ -389,7 +387,7 @@ generate(std::shared_ptr<vlm::Module> Model, const std::string &Prompt,
   float TopP = 1.0f;
   std::map<int, float> LogitBias = {};
   auto LanguageModel = std::dynamic_pointer_cast<vlm::LanguageModel>(
-      Model->Submodules["language_model"]);
+      this->Submodules["language_model"]);
 
   auto Sample = [&](mx::array Logits) -> std::tuple<mx::array, mx::array> {
     if (!LogitBias.empty()) {
@@ -438,7 +436,7 @@ generate(std::shared_ptr<vlm::Module> Model, const std::string &Prompt,
     NewShape.insert(NewShape.begin(), 1);
     // TODO: handle decoder_input_ids
     auto Outputs = std::dynamic_pointer_cast<vlm::LanguageModel>(
-                       Model->Submodules["language_model"])
+                       this->Submodules["language_model"])
                        ->forward(reshape(Y, NewShape), Cache);
     mx::array Logits = std::get<0>(Outputs);
     Logits = take(Logits, Logits.shape()[1] - 1, 1);
@@ -466,7 +464,7 @@ generate(std::shared_ptr<vlm::Module> Model, const std::string &Prompt,
   };
 
   // Perform the first step
-  auto Outputs = Model->forward(InputIds, PixelValues, Mask, Cache);
+  auto Outputs = this->forward(InputIds, PixelValues, Mask, Cache);
   mx::array Logits = std::get<0>(Outputs);
   Logits = take(Logits, Logits.shape()[1] - 1, 1);
   auto [Y, LogProbs] = Sample(Logits);

@@ -1,6 +1,8 @@
 #include "registry.h"
 #include "transformer.h"
 
+namespace llm {
+
 std::shared_ptr<Transformer> llama38b(int VocabSize, float NormEps,
                                       float RopeTheta, bool RopeTraditional) {
   return std::make_shared<Transformer>(Transformer(
@@ -23,3 +25,4 @@ std::shared_ptr<Transformer> tinyLlama11BChatV10(int VocabSize, float NormEps,
       2048, std::vector<int>{5632}, VocabSize, 22, std::vector<int>{32},
       std::vector<int>{4}, NormEps, {}, RopeTraditional, RopeTheta));
 }
+} // namespace llm

@@ -1,4 +1,5 @@
 #pragma once
+#include "../prompt/prompt.h"
 #include "activations.h"
 #include "base.h"
 #include "embedding.h"
@@ -9,11 +10,14 @@
 #include <mlx/fast.h>
 #include <mlx/ops.h>
 #include <optional>
+#include <tokenizers_cpp.h>
 #include <tuple>
 #include <unordered_map>
 #include <vector>
 
 namespace nn = mlx::core::nn;
+
+namespace llm {
 
 class RMSNorm : public nn::Module {
   float Eps;
@@ -194,6 +198,10 @@ public:
                                  nn::Linear(Dim, VocabSize, false)));
     }
   }
+  struct LLMOutput {
+    std::string Answer;
+    std::vector<int32_t> TokenList;
+  };
   std::tuple<mx::array,
              std::optional<std::vector<std::tuple<mx::array, mx::array>>>>
   embed(mx::array Input,
@@ -207,10 +215,14 @@ public:
               KVCachePar = {});
   std::tuple<mx::array,
              std::optional<std::vector<std::tuple<mx::array, mx::array>>>>
-  generate(mx::array Input, std::optional<float> Temp = 0.0);
+  stepGenerate(mx::array Input, std::optional<float> Temp = 0.0);
   std::tuple<mx::array,
              std::optional<std::vector<std::tuple<mx::array, mx::array>>>>
-  nextGenerate(mx::array Y, std::optional<float> Temp = 0.0,
-               std::optional<std::vector<std::tuple<mx::array, mx::array>>>
-                   KVCachePar = {});
+  nextStepGenerate(mx::array Y, std::optional<float> Temp = 0.0,
+                   std::optional<std::vector<std::tuple<mx::array, mx::array>>>
+                       KVCachePar = {});
+  LLMOutput generate(const std::string &Prompt, const BasePrompt &ModelPrompt,
+                     const int MaxToken, const bool Verbose,
+                     const std::unique_ptr<tokenizers::Tokenizer> &Tok);
 };
+} // namespace llm

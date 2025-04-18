@@ -1,4 +1,5 @@
 #include "../mlx/transformer.h"
+#include "../utils.h"
 #include "base.h"
 #include "embedding.h"
 #include "linear.h"
@@ -12,9 +13,12 @@
 #include <tuple>
 #include <vector>
 
+namespace llm {
+
 mx::array RMSNorm::forward(mx::array Input) {
   return mx::fast::rms_norm(Input, 1.0 + Parameters.at("weight"), Eps);
 }
+
 std::tuple<mx::array, std::tuple<mx::array, mx::array>>
 Attention::forward(mx::array Input, std::optional<mx::array> Mask,
                    std::optional<std::tuple<mx::array, mx::array>> KVCache) {
@@ -62,6 +66,7 @@ Attention::forward(mx::array Input, std::optional<mx::array> Mask,
               ->forward(Output),
           {Keys, Values}};
 }
+
 mx::array MLP::forward(mx::array Input) {
   if (Gemma) {
     return std::dynamic_pointer_cast<nn::Linear>(Submodules["down_proj"])
@@ -78,6 +83,7 @@ mx::array MLP::forward(mx::array Input) {
           std::dynamic_pointer_cast<nn::Linear>(Submodules["up_proj"])
               ->forward(Input));
 }
+
 std::tuple<mx::array, std::tuple<mx::array, mx::array>>
 TransformerBlock::forward(
     mx::array Input, std::optional<mx::array> Mask,
@@ -108,6 +114,7 @@ TransformerBlock::forward(
   }
   return {H + R, KVCache};
 }
+
 std::tuple<mx::array,
            std::optional<std::vector<std::tuple<mx::array, mx::array>>>>
 Transformer::embed(
@@ -120,6 +127,7 @@ Transformer::embed(
   if (Gemma) {
     H = H * (pow(Dim, 0.5));
   }
+
   std::optional<mx::array> Mask;
   if (H.shape()[1] > 1) {
     Mask = mx::nn::MultiHeadAttention::createAdditiveCausalMask(H.shape()[1]);
@@ -149,6 +157,7 @@ Transformer::embed(
   }
   return {H, KVCache};
 }
+
 std::tuple<mx::array,
            std::optional<std::vector<std::tuple<mx::array, mx::array>>>>
 Transformer::forward(
@@ -165,9 +174,10 @@ Transformer::forward(
   }
   return {Out, KVCache};
 }
+
 std::tuple<mx::array,
            std::optional<std::vector<std::tuple<mx::array, mx::array>>>>
-Transformer::generate(mx::array Input, std::optional<float> Temp) {
+Transformer::stepGenerate(mx::array Input, std::optional<float> Temp) {
   // Reshape Input to input[:, None]
   std::vector<int> ReshapeDim = Input.shape();
   ReshapeDim.insert(ReshapeDim.begin(), 1);
@@ -188,7 +198,7 @@ Transformer::generate(mx::array Input, std::optional<float> Temp) {
 }
 std::tuple<mx::array,
            std::optional<std::vector<std::tuple<mx::array, mx::array>>>>
-Transformer::nextGenerate(
+Transformer::nextStepGenerate(
     mx::array Y, std::optional<float> Temp,
     std::optional<std::vector<std::tuple<mx::array, mx::array>>> KVCachePar) {
   // Reshape Y to y[:, None]
@@ -204,3 +214,67 @@ Transformer::nextGenerate(
   }
   return {NextY, KVCache};
 }
+
+enum AnserSataus {
+  STOP,
+  WAIT,
+  GO,
+};
+
+AnserSataus answerSataus(std::string Text, std::string End) {
+  if (endsWith(Text, End)) {
+    return STOP;
+  }
+  for (int Idx = 1; Idx < static_cast<int>(End.size()); Idx++) {
+    if (endsWith(Text, End.substr(0, Idx))) {
+      return WAIT;
+    }
+  }
+  return GO;
+}
+
+Transformer::LLMOutput
+Transformer::generate(const std::string &Prompt, const BasePrompt &ModelPrompt,
+                      const int MaxToken, const bool Verbose,
+                      const std::unique_ptr<tokenizers::Tokenizer> &Tok) {
+  const std::vector<int> Ids = Tok->Encode(Prompt);
+  mx::array Token =
+      mx::array(Ids.data(), {static_cast<int>(Ids.size())}, mx::int32);
+  std::vector<int32_t> TokenList;
+  int TokenCount = 0;
+  int Skip = 0;
+  std::string Answer;
+  auto [Y, KVCache] = this->stepGenerate(Token, 0.1);
+  while (true) {
+    TokenCount++;
+    if (TokenCount > MaxToken) {
+      break;
+    }
+    eval(Y);
+    std::vector<int32_t> Tokens;
+    auto *Data = Y.data<int32_t>();
+    for (int Idx = 0; Idx < static_cast<int>(Y.size()); Idx++) {
+      Tokens.emplace_back(Data[Idx]);
+    }
+    // TODO: break when the token is the eos_token_id
+    TokenList.insert(TokenList.end(), Tokens.begin(), Tokens.end());
+    if (Verbose) {
+
+      Answer = Tok->Decode(TokenList);
+    }
+    const AnserSataus Status = answerSataus(Answer, ModelPrompt.TextEnd);
+    if (Status == STOP) {
+      break;
+    }
+    if (Status == GO) {
+      if (Verbose) {
+        std::cout << Answer.substr(Skip) << std::flush;
+      }
+      Skip = Answer.size();
+    }
+    auto [NY, NKVCache] = this->nextStepGenerate(Y, 0.1, KVCache);
+    Y = NY, KVCache = NKVCache;
+  }
+  return {Answer, TokenList};
+}
+} // namespace llm

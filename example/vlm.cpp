@@ -22,8 +22,7 @@ int main() {
   Kwargs.insert({"input_ids", InputIds});
   Kwargs.insert({"pixel_values", PixelValues});
   Kwargs.insert({"mask", Mask});
-  auto ToeknList = vlm::generate(std::dynamic_pointer_cast<vlm::Module>(Model),
-                                 {}, std::nullopt, true, Kwargs);
+  auto ToeknList = Model->generate({}, std::nullopt, true, Kwargs);
   for (auto &Token : ToeknList) {
     std::cout << Token << " ";
   }
