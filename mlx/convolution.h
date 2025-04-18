@@ -8,7 +8,8 @@ class Conv2d : public nn::Module {
   std::pair<int, int> Stride;
   std::pair<int, int> Dilation;
   int Groups;
-  public:
+
+public:
   Conv2d(int InChannels, int OutChannels, int KernelSize,
          std::pair<int, int> Stride = {1, 1},
          std::pair<int, int> Padding = {0, 0},

@@ -42,7 +42,7 @@ public:
   KVCache(int HeadDim, int NKVHeads, int Step = 256);
   KVCache(std::pair<int, int> HeadDims, int NKVHeads, int Step = 256);
   virtual std::tuple<mx::array, mx::array>
-  updateAndFetch(const mx::array &NewKeys, const mx::array &NewValues);
+  updateAndFetch(const mx::array &NewKeys, const mx::array &NewValues) override;
 
   std::tuple<mx::array, mx::array> fetch() const;
 

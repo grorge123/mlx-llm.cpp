@@ -33,7 +33,7 @@ void BaseCache::setMetaState(const std::string &Value) {
 
 bool BaseCache::isTrimmable() const { return false; }
 
-int BaseCache::trim(int N) { return 0; }
+int BaseCache::trim(int) { return 0; }
 
 // KVCache implementation
 KVCache::KVCache(int HeadDim, int NKVHeads, int Step)
@@ -385,7 +385,7 @@ generate(std::shared_ptr<vlm::Module> Model, const std::string &Prompt,
   int MaxTokens = 256;
   float Temperature = 0.0f;
   std::optional<float> RepetitionPenalty = std::nullopt;
-  int RepetitionContextSize = 20;
+  size_t RepetitionContextSize = 20;
   float TopP = 1.0f;
   std::map<int, float> LogitBias = {};
   auto LanguageModel = std::dynamic_pointer_cast<vlm::LanguageModel>(
@@ -394,8 +394,8 @@ generate(std::shared_ptr<vlm::Module> Model, const std::string &Prompt,
   auto Sample = [&](mx::array Logits) -> std::tuple<mx::array, mx::array> {
     if (!LogitBias.empty()) {
       for (const auto &[Index, Value] : LogitBias) {
-        Logits = mlx::core::scatter_add_axis(Logits, mx::array({Index}),
-                                             mx::array({Value}), 1);
+        Logits =
+            scatter_add_axis(Logits, mx::array({Index}), mx::array({Value}), 1);
       }
     }
 
@@ -441,17 +441,17 @@ generate(std::shared_ptr<vlm::Module> Model, const std::string &Prompt,
                        Model->Submodules["language_model"])
                        ->forward(reshape(Y, NewShape), Cache);
     mx::array Logits = std::get<0>(Outputs);
-    Logits = take(Logits, {Logits.shape()[1] - 1}, 1);
+    Logits = take(Logits, Logits.shape()[1] - 1, 1);
     mx::array LogProbs = mx::array({});
     if (RepetitionPenalty.has_value()) {
       if (RepetitionContext.size() > 0) {
         auto Indices = mx::array(RepetitionContext.data(),
                                  {static_cast<int>(RepetitionContext.size())});
         auto SelectedLogits = take(Logits, Indices, 1);
-        SelectedLogits = mlx::core::where(
-            SelectedLogits < 0, SelectedLogits * RepetitionPenalty.value(),
-            SelectedLogits / RepetitionPenalty.value());
-        mlx::core::put_along_axis(Logits, Indices, SelectedLogits, 1);
+        SelectedLogits = where(SelectedLogits < 0,
+                               SelectedLogits * RepetitionPenalty.value(),
+                               SelectedLogits / RepetitionPenalty.value());
+        put_along_axis(Logits, Indices, SelectedLogits, 1);
       }
       std::tie(Y, LogProbs) = Sample(Logits);
       RepetitionContext.emplace_back(Y.item<int>());
@@ -462,13 +462,13 @@ generate(std::shared_ptr<vlm::Module> Model, const std::string &Prompt,
       RepetitionContext.erase(RepetitionContext.begin(),
                               RepetitionContext.end() - RepetitionContextSize);
     }
-    return {Y, mlx::core::squeeze(LogProbs, 0)};
+    return {Y, squeeze(LogProbs, 0)};
   };
 
   // Perform the first step
   auto Outputs = Model->forward(InputIds, PixelValues, Mask, Cache);
   mx::array Logits = std::get<0>(Outputs);
-  Logits = take(Logits, {Logits.shape()[1] - 1}, 1);
+  Logits = take(Logits, Logits.shape()[1] - 1, 1);
   auto [Y, LogProbs] = Sample(Logits);
   mx::async_eval(Y);
   // TODO: handle cross_attention_states, encoder_outputs

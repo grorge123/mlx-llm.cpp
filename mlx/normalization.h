@@ -14,8 +14,8 @@ public:
 };
 
 class LayerNorm : public nn::Module {
-  float Eps;
   int Dims;
+  float Eps;
 
 public:
   LayerNorm(int Dims, float Eps = 1e-5, bool Affine = true, bool Bias = true)

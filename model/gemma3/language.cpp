@@ -164,7 +164,7 @@ MLP::MLP(int Dim, int HiddenDim) {
 mx::array MLP::forward(const mx::array &X) {
   mx::array A = std::dynamic_pointer_cast<nn::Linear>(Submodules["gate_proj"])
                     ->forward(X);
-  A = geluApprox(A);
+  A = mlx::core::geluApprox(A);
   mx::array B =
       std::dynamic_pointer_cast<nn::Linear>(Submodules["up_proj"])->forward(X);
   A = A * B;
@@ -252,9 +252,8 @@ mx::array Gemma3Model::forward(
           ? InputsEmbeds.value()
           : std::dynamic_pointer_cast<nn::Embedding>(Submodules["embed_tokens"])
                 ->forward(Inputs);
-  H = H *
-      mlx::core::astype(
-          mx::array(std::pow(Config.HiddenSize, 0.5), mx::bfloat16), H.dtype());
+  H = H * astype(mx::array(std::pow(Config.HiddenSize, 0.5), mx::bfloat16),
+                 H.dtype());
   std::vector<std::shared_ptr<vlm::BaseCache>> CacheValue =
       Cache.has_value() ? Cache.value()
                         : std::vector<std::shared_ptr<vlm::BaseCache>>(

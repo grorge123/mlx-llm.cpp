@@ -170,7 +170,7 @@ Encoder::forward(const mx::array &X,
     Out = L->forward(Out, Mask);
     if (OutputHiddenStates.has_value() && OutputHiddenStates.value())
       EncoderStates.push_back(Out);
-    H = take(Out, {0}, 0);
+    H = take(Out, 0, 0);
   }
   return {H, EncoderStates};
 }
