@@ -18,7 +18,8 @@ std::vector<mx::array> BaseCache::getState() const { return {}; }
 
 void BaseCache::setState(const std::vector<mx::array> &State) {
   if (!State.empty()) {
-    throw std::runtime_error("This cache has no state but a state was set.");
+    spdlog::error("This cache has no state but a state was set.");
+    assumingUnreachable();
   }
 }
 
@@ -26,8 +27,8 @@ std::string BaseCache::getMetaState() const { return ""; }
 
 void BaseCache::setMetaState(const std::string &Value) {
   if (!Value.empty()) {
-    throw std::runtime_error(
-        "This cache has no meta_state but a meta_state was set.");
+    spdlog::error("This cache has no meta_state but a meta_state was set.");
+    assumingUnreachable();
   }
 }
 
@@ -107,7 +108,8 @@ std::vector<mx::array> KVCache::getState() const {
 
 void KVCache::setState(const std::vector<mx::array> &State) {
   if (State.size() != 2) {
-    throw std::runtime_error("KVCache state must contain exactly two arrays");
+    spdlog::error("KVCache state must contain exactly two arrays");
+    assumingUnreachable();
   }
   Keys = State[0];
   Values = State[1];
@@ -289,7 +291,8 @@ void RotatingKVCache::setMetaState(const std::string &Value) {
     Offset = Values[3];
     Idx = Values[4];
   } else {
-    throw std::runtime_error("Invalid meta state format");
+    spdlog::error("Invalid meta state format.");
+    assumingUnreachable();
   }
 }
 

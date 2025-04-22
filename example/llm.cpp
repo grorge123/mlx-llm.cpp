@@ -37,23 +37,26 @@ int main() {
   spdlog::debug("Device: {}, Metal avaiuable: {}.",
                 (mx::default_device() == mx::Device::cpu ? "CPU" : "GPU"),
                 mx::metal::is_available());
+  // auto Tok =
+  //     Tokenizer::FromBlobJSON(loadBytesFromFile("../tokenizer-llama3.json"));
   auto Tok =
-      Tokenizer::FromBlobJSON(loadBytesFromFile("../tokenizer-llama3.json"));
+      Tokenizer::FromBlobJSON(loadBytesFromFile("../tokenizer-tiny.json"));
   const int MaxToken = 512;
   spdlog::info("Create Model...");
-  auto Model = llm::llama38b();
+  // auto Model = llm::llama38b();
   // auto Model = llama27bChat();
-  // auto Model = tinyLlama11BChatV10();
+  auto Model = llm::tinyLlama11BChatV10();
   spdlog::info("Load Model...");
   // Model->update(llamaToMlxllm("../llama2-7b"));
-  Model->update(llamaToMlxllm("../llama3-8b"));
-  // Model->update(llamaToMlxllm("../tiny"));
+  // Model->update(llamaToMlxllm("../llama3-8b"));
+  Model->update(llamaToMlxllm("../tiny"));
   Model =
-      std::dynamic_pointer_cast<llm::Transformer>(Model->toQuantized(64, 4));
-  auto W = Model->getWeigts();
-  saveWeights(W, "Llama-3-8B-4bit-64g.safetensors");
+      std::dynamic_pointer_cast<llm::Transformer>(Model->toQuantized(128, 4));
+  // auto W = Model->getWeigts();
+  // saveWeights(W, "Llama-3-8B-4bit-64g.safetensors");
   spdlog::info("Start generate...");
-  const LLaMA3Prompt ModelPrmopt;
+  // const LLaMA3Prompt ModelPrmopt;
+  const TinyLLaMAPrompt ModelPrmopt;
   std::string Prompt = "Where are you from?";
   auto Result = Model->generate(Prompt, ModelPrmopt, MaxToken, true, Tok);
 
