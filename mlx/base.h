@@ -19,8 +19,10 @@ public:
   mx::array &registerParameter(std::string Name, mx::array &&W);
   std::unordered_map<std::string, mx::array>
   getWeigts(const std::string &Prefix = "model");
-  virtual std::shared_ptr<nn::Module> toQuantized(int GroupSize = 64,
-                                                  int Bits = 4);
+  virtual std::shared_ptr<nn::Module> toQuantized(
+      int GroupSize = 64, int Bits = 4, const std::string &Prefix = "",
+      const std::unordered_map<std::string, mx::array> &Parameters = {});
+  virtual bool hasQuantize() { return false; }
   void update(std::unordered_map<std::string, mx::array> Parameters);
   void apply(std::string Key, mx::array Parameters);
   template <typename T>

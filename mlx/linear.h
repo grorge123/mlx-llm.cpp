@@ -26,7 +26,11 @@ public:
     }
   }
   virtual mx::array forward(mx::array Input);
-  std::shared_ptr<nn::Module> toQuantized(int GroupSize = 64,
-                                          int Bits = 4) override;
+  std::shared_ptr<nn::Module>
+  toQuantized(int GroupSize = 64, int Bits = 4, const std::string &Prefix = "",
+              const std::unordered_map<std::string, mx::array> &Parameters = {})
+      override;
+
+  virtual bool hasQuantize() override { return true; }
 };
 } // namespace mlx::core::nn
