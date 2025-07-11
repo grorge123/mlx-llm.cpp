@@ -16,11 +16,13 @@ public:
   std::string Name;
   std::unordered_map<std::string, mx::array> Parameters{};
   std::unordered_map<std::string, std::shared_ptr<Module>> Submodules{};
-  mx::array &registerParameter(std::string Name, array &&W);
+  mx::array &registerParameter(std::string Name, mx::array &&W);
   std::unordered_map<std::string, mx::array>
   getWeigts(const std::string &Prefix = "model");
-  virtual std::shared_ptr<nn::Module> toQuantized(int GroupSize = 64,
-                                                  int Bits = 4);
+  virtual std::shared_ptr<nn::Module> toQuantized(
+      int GroupSize = 64, int Bits = 4, const std::string &Prefix = "",
+      const std::unordered_map<std::string, mx::array> &Parameters = {});
+  virtual bool hasQuantize() { return false; }
   void update(std::unordered_map<std::string, mx::array> Parameters);
   void apply(std::string Key, mx::array Parameters);
   template <typename T>
@@ -58,3 +60,5 @@ template <typename T> void printVec(std::vector<T> Ve) {
     spdlog::debug("{} ", I);
   }
 }
+
+uint64_t fnv1aHash(const mx::array &X);

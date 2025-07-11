@@ -42,7 +42,7 @@ public:
   KVCache(int HeadDim, int NKVHeads, int Step = 256);
   KVCache(std::pair<int, int> HeadDims, int NKVHeads, int Step = 256);
   virtual std::tuple<mx::array, mx::array>
-  updateAndFetch(const mx::array &NewKeys, const mx::array &NewValues);
+  updateAndFetch(const mx::array &NewKeys, const mx::array &NewValues) override;
 
   std::tuple<mx::array, mx::array> fetch() const;
 
@@ -93,6 +93,54 @@ public:
       const mx::array &Mask,
       const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache =
           std::nullopt) = 0;
+  struct GenerationResult {
+    std::string Text;
+    int Token;
+    std::vector<float> LogProbs;
+    int PromptTokens;
+    int GenerationTokens;
+    float PromptTps;
+    float GenerationTps;
+    float PeakMemory;
+  };
+
+  // Add this struct to hold generation state
+  struct StreamGenerationState {
+    void *Model;
+    void *Processor;
+    mx::array PromptTokens;
+    mx::array InputIds;
+    mx::array PixelValues;
+    mx::array Mask;
+    mx::array CurrentToken;
+    std::vector<float> CurrentLogProbs;
+    int TokenCount;
+    double StartTime;
+    double PromptTime;
+    float PromptTps;
+    bool IsComplete;
+    std::map<std::string, mx::array> Kwargs;
+
+    // Generation parameters
+    int MaxTokens = 256;
+    float Temperature = 0.0;
+    std::optional<float> RepetitionPenalty = std::nullopt;
+    std::optional<int> RepetitionContextSize = 20;
+    float TopP = 1.0;
+    std::map<int, float> LogitBias;
+
+    // State for generate_step
+    std::vector<int> RepetitionContext;
+    std::vector<void *> Cache; // Will hold appropriate cache objects
+    mx::array CrossAttentionStates;
+    mx::array EncoderOutputs;
+  };
+
+  std::vector<int> generate(
+      const std::string &Prompt = {},
+      std::optional<std::string> Image = std::nullopt, bool Verbose = false,
+      std::map<std::string, std::variant<mx::array, int, float, std::string>>
+          Kwargs = {});
 };
 class LanguageModel : public mlx::core::nn::Module {
 public:
@@ -119,54 +167,5 @@ std::optional<mx::array> createAttentionMask(
     std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> = std::nullopt);
 
 mx::array createAdditiveCausalMask(int N, int Offset = 0);
-
-struct GenerationResult {
-  std::string Text;
-  int Token;
-  std::vector<float> LogProbs;
-  int PromptTokens;
-  int GenerationTokens;
-  float PromptTps;
-  float GenerationTps;
-  float PeakMemory;
-};
-
-// Add this struct to hold generation state
-struct StreamGenerationState {
-  void *Model;
-  void *Processor;
-  mx::array PromptTokens;
-  mx::array InputIds;
-  mx::array PixelValues;
-  mx::array Mask;
-  mx::array CurrentToken;
-  std::vector<float> CurrentLogProbs;
-  int TokenCount;
-  double StartTime;
-  double PromptTime;
-  float PromptTps;
-  bool IsComplete;
-  std::map<std::string, mx::array> Kwargs;
-
-  // Generation parameters
-  int MaxTokens = 256;
-  float Temperature = 0.0;
-  std::optional<float> RepetitionPenalty = std::nullopt;
-  std::optional<int> RepetitionContextSize = 20;
-  float TopP = 1.0;
-  std::map<int, float> LogitBias;
-
-  // State for generate_step
-  std::vector<int> RepetitionContext;
-  std::vector<void *> Cache; // Will hold appropriate cache objects
-  mx::array CrossAttentionStates;
-  mx::array EncoderOutputs;
-};
-
-std::vector<int>
-generate(std::shared_ptr<vlm::Module> Model, const std::string &Prompt = {},
-         std::optional<std::string> Image = std::nullopt, bool Verbose = false,
-         std::map<std::string, std::variant<mx::array, int, float, std::string>>
-             Kwargs = {});
 
 } // namespace vlm

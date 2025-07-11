@@ -12,10 +12,10 @@ namespace nn = mlx::core::nn;
 namespace gemma3 {
 
 struct TextConfig {
-  std::string ModelType;
-  int HiddenSize;
-  int NumHiddenLayers;
-  int IntermediateSize;
+  std::string ModelType = "gemma3_text";
+  int HiddenSize = 2560;
+  int NumHiddenLayers = 34;
+  int IntermediateSize = 10240;
   int NumAttentionHeads = 8;
   int HeadDim = 256;
   float RmsNormEps = 1.0e-6;
@@ -24,7 +24,7 @@ struct TextConfig {
   float RopeGlobalBaseFreq = 1000000.0f;
   float RopeLocalBaseFreq = 10000.0f;
   bool RopeTraditional = false;
-  float QueryPreAttnScalar = 0.0625;
+  float QueryPreAttnScalar = 256;
   int SlidingWindow = 1024;
   std::optional<
       std::unordered_map<std::string, std::variant<float, std::vector<float>>>>

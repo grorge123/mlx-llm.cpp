@@ -32,80 +32,40 @@ std::string loadBytesFromFile(const std::string &Path) {
   Fs.read(Data.data(), Size);
   return Data;
 }
-enum AnserSataus {
-  STOP,
-  WAIT,
-  GO,
-};
-AnserSataus answerSataus(std::string Text, std::string End) {
-  if (endsWith(Text, End)) {
-    return STOP;
-  }
-  for (int Idx = 1; Idx < static_cast<int>(End.size()); Idx++) {
-    if (endsWith(Text, End.substr(0, Idx))) {
-      return WAIT;
-    }
-  }
-  return GO;
-}
+
 int main() {
   spdlog::debug("Device: {}, Metal avaiuable: {}.",
                 (mx::default_device() == mx::Device::cpu ? "CPU" : "GPU"),
                 mx::metal::is_available());
+  // auto Tok =
+  //     Tokenizer::FromBlobJSON(loadBytesFromFile("../tokenizer-llama3.json"));
   auto Tok =
-      Tokenizer::FromBlobJSON(loadBytesFromFile("../tokenizer-llama3.json"));
+      Tokenizer::FromBlobJSON(loadBytesFromFile("../tokenizer-tiny.json"));
   const int MaxToken = 512;
   spdlog::info("Create Model...");
-  auto Model = llama38b();
+  // auto Model = llm::llama38b();
   // auto Model = llama27bChat();
-  // auto Model = tinyLlama11BChatV10();
+  auto Model = llm::tinyLlama11BChatV10();
   spdlog::info("Load Model...");
   // Model->update(llamaToMlxllm("../llama2-7b"));
-  Model->update(llamaToMlxllm("../llama3-8b"));
-  // Model->update(llamaToMlxllm("../tiny"));
-  Model = std::dynamic_pointer_cast<Transformer>(Model->toQuantized(64, 4));
-  auto W = Model->getWeigts();
-  saveWeights(W, "Llama-3-8B-4bit-64g.safetensors");
+  // Model->update(llamaToMlxllm("../llama3-8b"));
+  Model->update(llamaToMlxllm("../tiny"));
+  Model =
+      std::dynamic_pointer_cast<llm::Transformer>(Model->toQuantized(128, 4));
+  // auto W = Model->getWeigts();
+  // saveWeights(W, "Llama-3-8B-4bit-64g.safetensors");
   spdlog::info("Start generate...");
-  const LLaMA3Prompt Prmopt;
-  const std::vector<int> Ids = Tok->Encode("Where are you from?");
-  mx::array Token =
-      mx::array(Ids.data(), {static_cast<int>(Ids.size())}, mx::int32);
-  std::vector<int32_t> TokenList;
-  std::string Answer;
-  int Skip = 0;
-  int TokenCount = 0;
+  // const LLaMA3Prompt ModelPrmopt;
+  const TinyLLaMAPrompt ModelPrmopt;
+  std::string Prompt = "Where are you from?";
+  auto Result = Model->generate(Prompt, ModelPrmopt, MaxToken, true, Tok);
+
   const auto Start{std::chrono::steady_clock::now()};
-  auto [Y, KVCache] = Model->generate(Token, 0.1);
-  while (true) {
-    TokenCount++;
-    if (TokenCount > MaxToken) {
-      break;
-    }
-    eval(Y);
-    std::vector<int32_t> Tokens;
-    auto *Data = Y.data<int32_t>();
-    for (int Idx = 0; Idx < static_cast<int>(Y.size()); Idx++) {
-      Tokens.emplace_back(Data[Idx]);
-    }
-    // TODO: break when the token is the eos_token_id
-    TokenList.insert(TokenList.end(), Tokens.begin(), Tokens.end());
-    Answer = Tok->Decode(TokenList);
-    const AnserSataus Status = answerSataus(Answer, Prmopt.TextEnd);
-    if (Status == STOP) {
-      break;
-    }
-    if (Status == GO) {
-      std::cout << Answer.substr(Skip) << std::flush;
-      Skip = Answer.size();
-    }
-    auto [NY, NKVCache] = Model->nextGenerate(Y, 0.1, KVCache);
-    Y = NY, KVCache = NKVCache;
-  }
+
   std::cout << std::endl;
   const auto End{std::chrono::steady_clock::now()};
   const std::chrono::duration<double> ElapsedSeconds{End - Start};
   spdlog::info("Elapsed time: {} s. TPS: {}.", ElapsedSeconds.count(),
-               TokenList.size() / ElapsedSeconds.count());
+               Result.TokenList.size() / ElapsedSeconds.count());
   return 0;
 }

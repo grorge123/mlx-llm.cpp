@@ -18,7 +18,8 @@ std::vector<mx::array> BaseCache::getState() const { return {}; }
 
 void BaseCache::setState(const std::vector<mx::array> &State) {
   if (!State.empty()) {
-    throw std::runtime_error("This cache has no state but a state was set.");
+    spdlog::error("This cache has no state but a state was set.");
+    assumingUnreachable();
   }
 }
 
@@ -26,14 +27,14 @@ std::string BaseCache::getMetaState() const { return ""; }
 
 void BaseCache::setMetaState(const std::string &Value) {
   if (!Value.empty()) {
-    throw std::runtime_error(
-        "This cache has no meta_state but a meta_state was set.");
+    spdlog::error("This cache has no meta_state but a meta_state was set.");
+    assumingUnreachable();
   }
 }
 
 bool BaseCache::isTrimmable() const { return false; }
 
-int BaseCache::trim(int N) { return 0; }
+int BaseCache::trim(int) { return 0; }
 
 // KVCache implementation
 KVCache::KVCache(int HeadDim, int NKVHeads, int Step)
@@ -107,7 +108,8 @@ std::vector<mx::array> KVCache::getState() const {
 
 void KVCache::setState(const std::vector<mx::array> &State) {
   if (State.size() != 2) {
-    throw std::runtime_error("KVCache state must contain exactly two arrays");
+    spdlog::error("KVCache state must contain exactly two arrays");
+    assumingUnreachable();
   }
   Keys = State[0];
   Values = State[1];
@@ -289,7 +291,8 @@ void RotatingKVCache::setMetaState(const std::string &Value) {
     Offset = Values[3];
     Idx = Values[4];
   } else {
-    throw std::runtime_error("Invalid meta state format");
+    spdlog::error("Invalid meta state format.");
+    assumingUnreachable();
   }
 }
 
@@ -337,11 +340,10 @@ std::optional<mx::array> createAttentionMask(
   return Mask;
 }
 
-std::vector<int>
-generate(std::shared_ptr<vlm::Module> Model, const std::string &Prompt,
-         std::optional<std::string> Image, bool Verbose,
-         std::map<std::string, std::variant<mx::array, int, float, std::string>>
-             Kwargs) {
+std::vector<int> Module::generate(
+    const std::string &Prompt, std::optional<std::string> Image, bool Verbose,
+    std::map<std::string, std::variant<mx::array, int, float, std::string>>
+        Kwargs) {
 
   if (Verbose) {
     spdlog::info("==========");
@@ -366,7 +368,6 @@ generate(std::shared_ptr<vlm::Module> Model, const std::string &Prompt,
             std::get_if<int>(&ImageTokenIndexIt->second)) {
       ImageTokenIndex = *ImageTokenIndexPtr;
     } else {
-      // 处理键存在，但类型不匹配的情况
     }
   } else {
     assumingUnreachable();
@@ -385,17 +386,17 @@ generate(std::shared_ptr<vlm::Module> Model, const std::string &Prompt,
   int MaxTokens = 256;
   float Temperature = 0.0f;
   std::optional<float> RepetitionPenalty = std::nullopt;
-  int RepetitionContextSize = 20;
+  size_t RepetitionContextSize = 20;
   float TopP = 1.0f;
   std::map<int, float> LogitBias = {};
   auto LanguageModel = std::dynamic_pointer_cast<vlm::LanguageModel>(
-      Model->Submodules["language_model"]);
+      this->Submodules["language_model"]);
 
   auto Sample = [&](mx::array Logits) -> std::tuple<mx::array, mx::array> {
     if (!LogitBias.empty()) {
       for (const auto &[Index, Value] : LogitBias) {
-        Logits = mlx::core::scatter_add_axis(Logits, mx::array({Index}),
-                                             mx::array({Value}), 1);
+        Logits =
+            scatter_add_axis(Logits, mx::array({Index}), mx::array({Value}), 1);
       }
     }
 
@@ -438,20 +439,20 @@ generate(std::shared_ptr<vlm::Module> Model, const std::string &Prompt,
     NewShape.insert(NewShape.begin(), 1);
     // TODO: handle decoder_input_ids
     auto Outputs = std::dynamic_pointer_cast<vlm::LanguageModel>(
-                       Model->Submodules["language_model"])
+                       this->Submodules["language_model"])
                        ->forward(reshape(Y, NewShape), Cache);
     mx::array Logits = std::get<0>(Outputs);
-    Logits = take(Logits, {Logits.shape()[1] - 1}, 1);
+    Logits = take(Logits, Logits.shape()[1] - 1, 1);
     mx::array LogProbs = mx::array({});
     if (RepetitionPenalty.has_value()) {
       if (RepetitionContext.size() > 0) {
         auto Indices = mx::array(RepetitionContext.data(),
                                  {static_cast<int>(RepetitionContext.size())});
         auto SelectedLogits = take(Logits, Indices, 1);
-        SelectedLogits = mlx::core::where(
-            SelectedLogits < 0, SelectedLogits * RepetitionPenalty.value(),
-            SelectedLogits / RepetitionPenalty.value());
-        mlx::core::put_along_axis(Logits, Indices, SelectedLogits, 1);
+        SelectedLogits = where(SelectedLogits < 0,
+                               SelectedLogits * RepetitionPenalty.value(),
+                               SelectedLogits / RepetitionPenalty.value());
+        put_along_axis(Logits, Indices, SelectedLogits, 1);
       }
       std::tie(Y, LogProbs) = Sample(Logits);
       RepetitionContext.emplace_back(Y.item<int>());
@@ -462,13 +463,13 @@ generate(std::shared_ptr<vlm::Module> Model, const std::string &Prompt,
       RepetitionContext.erase(RepetitionContext.begin(),
                               RepetitionContext.end() - RepetitionContextSize);
     }
-    return {Y, mlx::core::squeeze(LogProbs, 0)};
+    return {Y, squeeze(LogProbs, 0)};
   };
 
   // Perform the first step
-  auto Outputs = Model->forward(InputIds, PixelValues, Mask, Cache);
+  auto Outputs = this->forward(InputIds, PixelValues, Mask, Cache);
   mx::array Logits = std::get<0>(Outputs);
-  Logits = take(Logits, {Logits.shape()[1] - 1}, 1);
+  Logits = take(Logits, Logits.shape()[1] - 1, 1);
   auto [Y, LogProbs] = Sample(Logits);
   mx::async_eval(Y);
   // TODO: handle cross_attention_states, encoder_outputs

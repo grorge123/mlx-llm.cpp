@@ -188,6 +188,22 @@ std::shared_ptr<Model> Model::fromPretrained(const std::string &ModelPath) {
   ModelConfigObj.TextConfig =
       TextConfig::fromDict(Obj["text_config"].get_object().value());
   auto Model = std::make_shared<gemma3::Model>(gemma3::Model(ModelConfigObj));
+  std::vector<std::filesystem::path> WeightFiles;
+  for (auto &P : std::filesystem::directory_iterator(Path)) {
+    if (P.path().extension() == ".safetensors")
+      WeightFiles.push_back(P.path());
+  }
+  if (WeightFiles.empty()) {
+    spdlog::error("No safetensors found in {}.", Path.string());
+    assumingUnreachable();
+  }
+  std::unordered_map<std::string, mx::array> Weights;
+  for (auto &Wf : WeightFiles) {
+    auto W = mx::load_safetensors(Wf.string());
+    Weights.insert(W.first.begin(), W.first.end());
+  }
+  Weights = Model->sanitize(Weights);
+  Weights = gemma3::VisionModel(ModelConfigObj.VisionConfig).sanitize(Weights);
   auto QuantResult = Obj["quantization"].get_object();
   if (!QuantResult.error()) {
     auto GroupSize =
@@ -196,22 +212,8 @@ std::shared_ptr<Model> Model::fromPretrained(const std::string &ModelPath) {
     spdlog::info("Quantizing model to {} bits, {} group size.", Bits,
                  GroupSize);
     Model = std::dynamic_pointer_cast<gemma3::Model>(
-        Model->toQuantized(GroupSize, Bits));
+        Model->toQuantized(GroupSize, Bits, "", Weights));
   }
-  std::vector<std::filesystem::path> WeightFiles;
-  for (auto &P : std::filesystem::directory_iterator(Path)) {
-    if (P.path().extension() == ".safetensors")
-      WeightFiles.push_back(P.path());
-  }
-  if (WeightFiles.empty())
-    throw std::runtime_error("No safetensors found in " + Path.string());
-  std::unordered_map<std::string, mx::array> Weights;
-  for (auto &Wf : WeightFiles) {
-    auto W = mx::load_safetensors(Wf.string());
-    Weights.insert(W.first.begin(), W.first.end());
-  }
-  Weights = Model->sanitize(Weights);
-  Weights = gemma3::VisionModel(ModelConfigObj.VisionConfig).sanitize(Weights);
   Model->update(Weights);
   return Model;
 }
@@ -225,6 +227,9 @@ Model::sanitize(const std::unordered_map<std::string, mx::array> &Weights) {
       size_t Pos = Key.find("vision_model");
       if (Pos != std::string::npos)
         Key.replace(Pos, std::string("vision_model").length(), "vision_tower");
+    }
+    if (Key.find("model") == 0) {
+      Key.replace(0, std::string("model").length(), "");
     }
     Sanitized.insert({Key, Pair.second});
   }

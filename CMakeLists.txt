@@ -114,5 +114,8 @@ target_link_libraries(llm PUBLIC mlx_cpp)
 target_compile_options(llm PRIVATE -Wall -Wextra -Wpedantic -Werror)
 
 add_subdirectory(tokenizer tokenizers EXCLUDE_FROM_ALL)
+
+target_include_directories(mlx_cpp PUBLIC ${CMAKE_SOURCE_DIR}/tokenizer/include)
+target_link_libraries(mlx_cpp PUBLIC tokenizers_cpp)
 target_include_directories(llm PUBLIC ${CMAKE_SOURCE_DIR}/tokenizer/include)
 target_link_libraries(llm PUBLIC tokenizers_cpp)
