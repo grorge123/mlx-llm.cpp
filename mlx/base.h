@@ -62,3 +62,5 @@ template <typename T> void printVec(std::vector<T> Ve) {
 }
 
 uint64_t fnv1aHash(const mx::array &X);
+
+void debugArray(const mx::array &X, const std::string &Name);

@@ -49,7 +49,7 @@ void Module::apply(std::string Key, mx::array Value) {
   } else {
     std::string LayerName = SplitKey[0];
     SplitKey.erase(SplitKey.begin());
-    if (LayerName == "layers") {
+    if (LayerName == "layers" || LayerName == "blocks") {
       LayerName += "." + SplitKey[0];
       SplitKey.erase(SplitKey.begin());
     }
@@ -112,4 +112,13 @@ uint64_t fnv1aHash(const mx::array &X) {
   } catch (const std::exception &e) {
     throw std::runtime_error("Failed to parse hash value from Python output.");
   }
+}
+
+void debugArray(const mx::array &X, const std::string &Name) {
+  std::cout << Name << " shape: (";
+  for (auto &Shape : X.shape()) {
+    std::cout << Shape << " ";
+  }
+  std::cout << ") ";
+  std::cout  << fnv1aHash(X) << std::endl;
 }

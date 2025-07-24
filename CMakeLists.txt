@@ -19,6 +19,14 @@ FetchContent_Declare(
   GIT_TAG e69e5f977d458f2650bb346dadf2ad30c5320281)
 FetchContent_MakeAvailable(fmt)
 find_package(MLX CONFIG REQUIRED)
+find_package(ZLIB REQUIRED)
+
+find_program(FFMPEG_EXECUTABLE ffmpeg)
+if(NOT FFMPEG_EXECUTABLE)
+  message(WARNING "ffmpeg not found. Audio loading functionality in whisper_transcribe.cpp requires ffmpeg CLI tool to be installed and available in PATH.")
+else()
+  message(STATUS "Found ffmpeg: ${FFMPEG_EXECUTABLE}")
+endif()
 add_library(
   mlx_cpp
   prompt/prompt.cpp
@@ -34,6 +42,10 @@ add_library(
   model/utils.cpp
   model/vlm_base.cpp
   model/vlm_sampling.cpp
+  model/whisper/whisper.cpp
+  model/whisper/tokenizer.cpp
+  model/whisper/decoding.cpp
+  model/whisper_transcribe.cpp
   mlx/base.cpp
   mlx/linear.cpp
   mlx/convolution.cpp
@@ -49,6 +61,7 @@ target_link_libraries(mlx_cpp PUBLIC mlx)
 target_include_directories(mlx_cpp PUBLIC ${CMAKE_SOURCE_DIR}/mlx)
 target_include_directories(mlx_cpp PUBLIC ${MLX_INCLUDE_DIRS})
 target_link_libraries(mlx_cpp PUBLIC ${MLX_LIBRARIES})
+target_link_libraries(mlx_cpp PUBLIC ZLIB::ZLIB)
 
 target_compile_options(
   mlx_cpp
@@ -64,7 +77,8 @@ target_compile_options(
 target_link_options(mlx_cpp PRIVATE -fsanitize=undefined -fsanitize=address)
 
 target_link_libraries(mlx_cpp PRIVATE "-fsanitize=address"
-                                      "-fsanitize=undefined")
+                                      "-fsanitize=undefined"
+                                      "-g")
 
 FetchContent_Declare(
   simdjson
@@ -97,7 +111,7 @@ find_package(spdlog NO_CMAKE_PACKAGE_REGISTRY QUIET)
 FetchContent_Declare(
   spdlog
   GIT_REPOSITORY https://github.com/gabime/spdlog.git
-  GIT_TAG v1.3.1)
+  GIT_TAG v1.15.3)
 FetchContent_MakeAvailable(spdlog)
 target_compile_options(spdlog INTERFACE -w)
 target_link_libraries(mlx_cpp PUBLIC spdlog)
@@ -119,3 +133,8 @@ target_include_directories(mlx_cpp PUBLIC ${CMAKE_SOURCE_DIR}/tokenizer/include)
 target_link_libraries(mlx_cpp PUBLIC tokenizers_cpp)
 target_include_directories(llm PUBLIC ${CMAKE_SOURCE_DIR}/tokenizer/include)
 target_link_libraries(llm PUBLIC tokenizers_cpp)
+
+add_executable(whisper example/whisper.cpp)
+target_include_directories(whisper PUBLIC ${CMAKE_SOURCE_DIR})
+target_link_libraries(whisper PUBLIC mlx_cpp)
+target_compile_options(whisper PRIVATE -Wall -Wextra -Wpedantic -Werror)
