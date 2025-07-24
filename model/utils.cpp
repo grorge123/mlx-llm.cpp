@@ -1,5 +1,7 @@
 #include "utils.h"
+#include <fstream>
 #include <sstream>
+
 std::vector<std::string> splitString(const std::string &S, char Delim) {
   std::vector<std::string> Result;
   std::stringstream SS(S);
@@ -46,4 +48,24 @@ void saveWeights(const mx::array &Weights, const std::string &Path) {
     spdlog::error("Unsupported file format");
     assumingUnreachable();
   }
+}
+
+std::string loadBytesFromFile(const std::string &Path) {
+  std::ifstream Fs(Path, std::ios::in | std::ios::binary);
+  if (Fs.fail()) {
+    std::cerr << "Cannot open " << Path << std::endl;
+    exit(1);
+  }
+  std::string Data;
+  Fs.seekg(0, std::ios::end);
+  const size_t Size = static_cast<size_t>(Fs.tellg());
+  Fs.seekg(0, std::ios::beg);
+  Data.resize(Size);
+  Fs.read(Data.data(), Size);
+  return Data;
+}
+
+void fillPlaceholders(std::ostringstream &oss, const std::string &fmt,
+                      size_t &pos) {
+  oss << fmt.substr(pos);
 }

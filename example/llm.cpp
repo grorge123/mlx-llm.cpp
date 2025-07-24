@@ -18,21 +18,6 @@
 #include <vector>
 using tokenizers::Tokenizer;
 
-std::string loadBytesFromFile(const std::string &Path) {
-  std::ifstream Fs(Path, std::ios::in | std::ios::binary);
-  if (Fs.fail()) {
-    std::cerr << "Cannot open " << Path << std::endl;
-    exit(1);
-  }
-  std::string Data;
-  Fs.seekg(0, std::ios::end);
-  const size_t Size = static_cast<size_t>(Fs.tellg());
-  Fs.seekg(0, std::ios::beg);
-  Data.resize(Size);
-  Fs.read(Data.data(), Size);
-  return Data;
-}
-
 int main() {
   spdlog::debug("Device: {}, Metal avaiuable: {}.",
                 (mx::default_device() == mx::Device::cpu ? "CPU" : "GPU"),
