@@ -98,7 +98,6 @@ MultiHeadAttention::forward(
     }
   } else if (!KvCache.has_value()) {
     // Cross-attention without cache
-    debugArray(*Xa, "MultiHeadAttention forward Xa");
     K = Key->forward(*Xa);
     V = Value->forward(*Xa);
   } else {
@@ -256,10 +255,7 @@ mx::array AudioEncoder::forward(const mx::array &X) {
   for (auto &Block : Blocks) {
     auto [NewResult, _, __] = Block->forward(Result);
     Result = NewResult;
-    debugArray(Result, "AudioEncoder forward Result after Block");
   }
-  debugArray(LnPost->forward(Result),
-             "AudioEncoder forward Result after Blocks");
   return LnPost->forward(Result);
 }
 
@@ -336,7 +332,6 @@ TextDecoder::forward(
     NewKvCache[I] = UpdatedCache;
     CrossQk[I] = BlockCrossQk;
   }
-  debugArray(Result, "TextDecoder forward Result after Blocks");
   Result = Ln->forward(Result);
   mx::array Logits = TokenEmbedding->asLinear(Result);
 

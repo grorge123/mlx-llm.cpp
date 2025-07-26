@@ -33,6 +33,7 @@ mx::array loadAudio(const std::string &FilePath, int SampleRate) {
                                   "-ac",      std::to_string(Channels),
                                   "-acodec",  "pcm_s16le",
                                   "-ar",      std::to_string(SampleRate),
+                                  "-v",       "quiet",
                                   "-"};
 
   // Build command string
@@ -336,8 +337,6 @@ decodeWithFallback(std::shared_ptr<whisper::Whisper> Model,
     // Generate tokens
     mx::array CurrentTokens = mx::array(
         Tokens.data(), {1, static_cast<int>(Tokens.size())}, mx::int32);
-    debugArray(CurrentTokens, "decodeWithFallback CurrentTokens");
-    debugArray(MelSegment, "decodeWithFallback MelSegment");
     Result = std::get<DecodingResult>(decode(Model, MelSegment, Options));
 
     // Check fallback conditions
