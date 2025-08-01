@@ -73,27 +73,24 @@ detectLanguage(std::shared_ptr<Whisper> Model, const mx::array &Mel,
   mx::array LanguageTokenProbs = mx::softmax(Logits, -1);
   LanguageTokenProbs = mx::take(LanguageTokenProbs, 0, 0);
 
-  // LanguageTokenProbs = mx::take(LanguageTokenProbs, 0);
+  debugArray(LanguageTokens, "LanguageTokens");
+  debugArray(LanguageTokenProbs, "LanguageProbs");
   std::vector<std::map<std::string, float>> LanguageProbs;
   auto LangCodes = Tokenizer->getAllLanguageCodes();
-  std::cout << "all_language-tokens: ";
-  for (const auto& token : LangTokens) {
-    std::cout << token << " ";
-  }
-  std::cout << std::endl;
-  std::cout << "all_language-codes: ";
-  for (const auto& code : LangCodes) {
-    std::cout << code << " ";
-  }
-  std::cout << std::endl;
 
   for (int I = 0; I < NAudio; ++I) {
     std::map<std::string, float> Probs;
     for (size_t J = 0; J < LangTokens.size() && J < LangCodes.size(); ++J) {
+      int TokenId = LangTokens[J];
+      std::string LangCode = LangCodes[J];
+
       mx::array ProbArray =
-          mx::take(mx::take(LanguageTokenProbs, I, 0), LangTokens[J], 0);
+          mx::take(mx::take(LanguageTokenProbs, mx::array({0}), 0),
+                   mx::array({TokenId}), -1);
+      ProbArray = mx::squeeze(ProbArray);
+
       float Prob = ProbArray.item<float>();
-      Probs[LangCodes[J]] = Prob;
+      Probs[LangCode] = Prob;
     }
     LanguageProbs.push_back(Probs);
   }
@@ -846,8 +843,14 @@ std::vector<DecodingResult> DecodingTask::run(const mx::array &Mel) {
 std::variant<DecodingResult, std::vector<DecodingResult>>
 decode(std::shared_ptr<Whisper> Model, const mx::array &Mel,
        const DecodingOptions &Options) {
+  auto MelArray = Mel;
+  if (Mel.ndim() == 2) {
+    auto NewShape = Mel.shape();
+    NewShape.insert(NewShape.begin(), 1);
+    MelArray = mlx::core::reshape(Mel, NewShape);
+  }
   debugArray(Mel, "decode Mel");
-  auto Results = DecodingTask(Model, Options).run(Mel);
+  auto Results = DecodingTask(Model, Options).run(MelArray);
   exit(0);
 
   if (Results.size() == 1) {

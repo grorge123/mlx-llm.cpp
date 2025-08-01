@@ -10,7 +10,7 @@
 
 namespace whisper {
 
-const std::map<std::string, std::string> LANGUAGES = {
+const std::vector<std::pair<std::string, std::string>> LANGUAGES = {
     {"en", "english"},     {"zh", "chinese"},    {"de", "german"},
     {"es", "spanish"},     {"ru", "russian"},    {"ko", "korean"},
     {"fr", "french"},      {"ja", "japanese"},   {"pt", "portuguese"},
@@ -45,6 +45,26 @@ const std::map<std::string, std::string> LANGUAGES = {
     {"haw", "hawaiian"},   {"ln", "lingala"},    {"ha", "hausa"},
     {"ba", "bashkir"},     {"jw", "javanese"},   {"su", "sundanese"},
     {"yue", "cantonese"}};
+
+// Helper function to find language by code
+std::string findLanguageByCode(const std::string &Code) {
+  for (const auto &[LangCode, Language] : LANGUAGES) {
+    if (LangCode == Code) {
+      return Language;
+    }
+  }
+  return "";
+}
+
+// Helper function to check if language code exists
+bool languageCodeExists(const std::string &Code) {
+  for (const auto &[LangCode, Language] : LANGUAGES) {
+    if (LangCode == Code) {
+      return true;
+    }
+  }
+  return false;
+}
 
 const std::unordered_map<std::string, std::string> ToLanguageCode = []() {
   std::unordered_map<std::string, std::string> ToLanguageCodeMap;
@@ -241,10 +261,8 @@ Tokenizer::Tokenizer(std::unique_ptr<Encoding> EncodingPtr, int NumLanguages,
     : EncodingPtr(std::move(EncodingPtr)), NumLanguages(NumLanguages),
       Language(Language), Task(Task) {
 
-  // Initialize special tokens map
   for (const auto &Special : this->EncodingPtr->SpecialTokensSet) {
     int SpecialToken = this->EncodingPtr->encodeSingleToken(Special);
-    std::cout << "Special token for " << Special << ": " << SpecialToken  << std::endl;
     SpecialTokens[Special] = SpecialToken;
   }
 
@@ -252,7 +270,6 @@ Tokenizer::Tokenizer(std::unique_ptr<Encoding> EncodingPtr, int NumLanguages,
   int Sot = SpecialTokens["<|startoftranscript|>"];
   int Translate = SpecialTokens["<|translate|>"];
   int Transcribe = SpecialTokens["<|transcribe|>"];
-
   std::vector<std::string> Langs;
   for (const auto &[Code, Name] : LANGUAGES) {
     Langs.push_back(Code);
@@ -380,6 +397,8 @@ int Tokenizer::toLanguageToken(const std::string &Language) const {
 std::vector<int> Tokenizer::getAllLanguageTokens() const {
   if (!CachedAllLanguageTokens.has_value()) {
     std::vector<int> Result;
+
+    std::vector<std::string> SortedLanguageTokens;
     for (const auto &[Token, TokenId] : SpecialTokens) {
       std::string Stripped = Token;
       const std::string CharsToStrip = "<|>";
@@ -391,8 +410,17 @@ std::vector<int> Tokenizer::getAllLanguageTokens() const {
              CharsToStrip.find(Stripped.back()) != std::string::npos) {
         Stripped.pop_back();
       }
-      if (LANGUAGES.find(Stripped) != LANGUAGES.end()) {
-        Result.push_back(TokenId);
+      if (languageCodeExists(Stripped)) {
+        SortedLanguageTokens.push_back(Token);
+      }
+    }
+
+    std::sort(SortedLanguageTokens.begin(), SortedLanguageTokens.end());
+
+    for (const std::string &Token : SortedLanguageTokens) {
+      auto It = SpecialTokens.find(Token);
+      if (It != SpecialTokens.end()) {
+        Result.push_back(It->second);
       }
     }
     if (static_cast<int>(Result.size()) > NumLanguages) {
@@ -630,16 +658,13 @@ std::unique_ptr<Encoding> getEncoding(const std::string &Name,
   std::vector<std::string> Specials = {"<|endoftext|>",
                                        "<|startoftranscript|>"};
 
-  // Add language tokens
-  std::vector<std::string> Languages;
-  for (const auto &[Code, Language] : LANGUAGES) {
-    Languages.push_back(Code);
-    if (static_cast<int>(Languages.size()) >= NumLanguages)
+  // Add language tokens in the same order as defined in LANGUAGES vector
+  // This preserves Python LANGUAGES dict insertion order
+  for (const auto &[Code, Name] : LANGUAGES) {
+    Specials.push_back("<|" + Code + "|>");
+    if (static_cast<int>(Specials.size()) >=
+        NumLanguages + 2) // +2 for endoftext and startoftranscript
       break;
-  }
-
-  for (const std::string &Lang : Languages) {
-    Specials.push_back("<|" + Lang + "|>");
   }
 
   Specials.insert(Specials.end(),
@@ -674,7 +699,7 @@ getTokenizer(bool Multilingual, int NumLanguages,
     std::string Lang = ProcessedLanguage.value();
     std::transform(Lang.begin(), Lang.end(), Lang.begin(), ::tolower);
 
-    if (LANGUAGES.find(Lang) == LANGUAGES.end()) {
+    if (!languageCodeExists(Lang)) {
       auto It = ToLanguageCode.find(Lang);
       if (It != ToLanguageCode.end()) {
         ProcessedLanguage = It->second;

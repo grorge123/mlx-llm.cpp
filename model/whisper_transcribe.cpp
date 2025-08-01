@@ -156,8 +156,9 @@ mx::array stft(const mx::array &X, const mx::array &Window, int NPerseg = 256,
 
 mx::array melFilters(int NMels) {
   // Load precomputed mel filters from file
-  if(NMels != 80 && NMels != 128) {
-    spdlog::error("Unsupported number of mel filters: " + std::to_string(NMels));
+  if (NMels != 80 && NMels != 128) {
+    spdlog::error("Unsupported number of mel filters: " +
+                  std::to_string(NMels));
     assumingUnreachable();
   }
   std::string FileName = "assets/mel_filters_" + std::to_string(NMels) + ".npy";

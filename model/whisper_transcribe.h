@@ -1,8 +1,8 @@
 #pragma once
 
+#include "whisper/decoding.h"
 #include "whisper/tokenizer.h"
 #include "whisper/whisper.h"
-#include "whisper/decoding.h"
 #include <limits>
 #include <map>
 #include <memory>
@@ -18,14 +18,14 @@ constexpr int DefaultSampleRate = 16000;
 constexpr int DefaultNFft = 400;
 constexpr int DefaultHopLength = 160;
 constexpr int DefaultChunkLength = 30;
-constexpr int DefaultNSamples = DefaultChunkLength * DefaultSampleRate; // 480000 samples
-constexpr int DefaultNFrames = DefaultNSamples / DefaultHopLength;      // 3000 frames
+constexpr int DefaultNSamples =
+    DefaultChunkLength * DefaultSampleRate; // 480000 samples
+constexpr int DefaultNFrames =
+    DefaultNSamples / DefaultHopLength; // 3000 frames
 constexpr int DefaultFramesPerSecond = DefaultSampleRate / DefaultHopLength;
 constexpr int DefaultNSamplesPerToken = DefaultHopLength * 2;
 
-// Language mapping
-extern const std::map<std::string, std::string> LANGUAGES;
-
+extern const std::vector<std::pair<std::string, std::string>> LANGUAGES;
 
 // Word information for word-level timestamps
 struct WordInfo {
@@ -58,7 +58,8 @@ struct TranscribeResult {
 };
 
 // Audio processing functions
-mx::array loadAudio(const std::string &FilePath, int SampleRate = DefaultSampleRate);
+mx::array loadAudio(const std::string &FilePath,
+                    int SampleRate = DefaultSampleRate);
 mx::array padOrTrim(const mx::array &Array, int Length = DefaultNSamples,
                     int Axis = -1);
 mx::array logMelSpectrogram(const mx::array &Audio, int NMels = 80,
@@ -101,22 +102,23 @@ std::optional<TranscribeSegment>
 nextWordsSegment(const std::vector<TranscribeSegment> &Segments);
 
 // Main transcribe function
-TranscribeResult transcribe(
-    const std::variant<std::string, mx::array> &Audio,
-    std::shared_ptr<whisper::Whisper> Model,
-    std::optional<bool> Verbose = std::nullopt,
-    std::variant<float, std::vector<float>> Temperature =
-        std::vector<float>{0.0f, 0.2f, 0.4f, 0.6f, 0.8f, 1.0f},
-    std::optional<float> CompressionRatioThreshold = 2.4f,
-    std::optional<float> LogprobThreshold = -1.0f,
-    std::optional<float> NoSpeechThreshold = 0.6f,
-    bool ConditionOnPreviousText = true,
-    std::optional<std::string> InitialPrompt = std::nullopt,
-    bool WordTimestamps = false,
-    const std::string &PrependPunctuations = "\"'“¿([{-\"'.。,，!！?？:：”)]}、",
-    const std::string &AppendPunctuations = "\"'.,!?:\")]},",
-    std::variant<std::string, std::vector<float>> ClipTimestamps = "0",
-    std::optional<float> HallucinationSilenceThreshold = std::nullopt,
-    const DecodingOptions &DecodeOptions = DecodingOptions());
+TranscribeResult
+transcribe(const std::variant<std::string, mx::array> &Audio,
+           std::shared_ptr<whisper::Whisper> Model,
+           std::optional<bool> Verbose = std::nullopt,
+           std::variant<float, std::vector<float>> Temperature =
+               std::vector<float>{0.0f, 0.2f, 0.4f, 0.6f, 0.8f, 1.0f},
+           std::optional<float> CompressionRatioThreshold = 2.4f,
+           std::optional<float> LogprobThreshold = -1.0f,
+           std::optional<float> NoSpeechThreshold = 0.6f,
+           bool ConditionOnPreviousText = true,
+           std::optional<std::string> InitialPrompt = std::nullopt,
+           bool WordTimestamps = false,
+           const std::string &PrependPunctuations =
+               "\"'“¿([{-\"'.。,，!！?？:：”)]}、",
+           const std::string &AppendPunctuations = "\"'.,!?:\")]},",
+           std::variant<std::string, std::vector<float>> ClipTimestamps = "0",
+           std::optional<float> HallucinationSilenceThreshold = std::nullopt,
+           const DecodingOptions &DecodeOptions = DecodingOptions());
 
 } // namespace whisper

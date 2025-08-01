@@ -12,8 +12,13 @@
 
 namespace whisper {
 
-extern const std::map<std::string, std::string> LANGUAGES;
+// Use vector to preserve Python LANGUAGES dict insertion order
+extern const std::vector<std::pair<std::string, std::string>> LANGUAGES;
 extern const std::unordered_map<std::string, std::string> ToLanguageCode;
+
+// Helper functions for LANGUAGES vector
+std::string findLanguageByCode(const std::string& Code);
+bool languageCodeExists(const std::string& Code);
 
 class Encoding {
 public:
