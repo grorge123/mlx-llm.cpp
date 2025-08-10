@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cassert>
 #include <mlx/array.h>
+#include <mlx/dtype.h>
 #include <mlx/ops.h>
 #include <sstream>
 #include <zlib.h>
@@ -73,8 +74,6 @@ detectLanguage(std::shared_ptr<Whisper> Model, const mx::array &Mel,
   mx::array LanguageTokenProbs = mx::softmax(Logits, -1);
   LanguageTokenProbs = mx::take(LanguageTokenProbs, 0, 0);
 
-  debugArray(LanguageTokens, "LanguageTokens");
-  debugArray(LanguageTokenProbs, "LanguageProbs");
   std::vector<std::map<std::string, float>> LanguageProbs;
   auto LangCodes = Tokenizer->getAllLanguageCodes();
 
@@ -110,14 +109,14 @@ mx::array Inference::logits(const mx::array &Tokens,
                             const mx::array &AudioFeatures) {
   auto [LogitsOutput, NewKvCache, _] =
       std::dynamic_pointer_cast<TextDecoder>(Model->Submodules.at("decoder"))
-          ->forward(Tokens, AudioFeatures);
+          ->forward(Tokens, AudioFeatures, KvCache);
+  KvCache = NewKvCache;
   return mx::astype(LogitsOutput, mx::float32);
 }
 
 void Inference::rearrangeKvCache(const std::vector<int> &SourceIndices) {
-  if (!KvCache)
-    return;
   // TODO: Implement KV cache rearrangement for beam search
+  assumingUnreachable();
 }
 
 void Inference::reset() { KvCache = std::nullopt; }
@@ -133,7 +132,6 @@ void GreedyDecoder::reset() {
 std::tuple<mx::array, bool, mx::array>
 GreedyDecoder::update(const mx::array &Tokens, const mx::array &Logits,
                       const mx::array &SumLogprobs) {
-
   int NBatch = Tokens.shape(0);
 
   // Sample next tokens
@@ -145,23 +143,13 @@ GreedyDecoder::update(const mx::array &Tokens, const mx::array &Logits,
   }
 
   // Compute logprobs
-  mx::array Logprobs = Logits - mx::logsumexp(Logits, -1, true);
+  mx::array Logprobs = Logits - mx::logsumexp(Logits, -1, false);
   mx::array CurrentLogprobs =
-      mx::take_along_axis(Logprobs, mx::expand_dims(NextTokens, -1), -1);
-  CurrentLogprobs = mx::squeeze(CurrentLogprobs, -1);
-
-  // Check for EOT
-  mx::array EotMask =
-      mx::equal(mx::take(Tokens, mx::array({-1}), 1), mx::array({Eot}));
-  EotMask = mx::squeeze(EotMask, -1);
-
-  // Update tokens to set EOT for completed sequences
-  NextTokens = NextTokens * (1 - mx::astype(EotMask, mx::int32)) +
-               Eot * mx::astype(EotMask, mx::int32);
-
-  // Update sum_logprobs, but don't add to sequences that have already ended
+      mx::take(Logprobs, mx::arange(Logprobs.shape(0)), 0);
+  CurrentLogprobs = take(CurrentLogprobs, NextTokens, 1);
   mx::array NewSumLogprobs =
-      SumLogprobs + CurrentLogprobs * (1.0f - mx::astype(EotMask, mx::float32));
+      SumLogprobs +
+      CurrentLogprobs * (take(Tokens, Tokens.shape(1) - 1, 1) != Eot);
 
   // Extend tokens
   mx::array NewTokens =
@@ -179,8 +167,9 @@ std::pair<mx::array, mx::array>
 GreedyDecoder::finalize(const mx::array &Tokens, const mx::array &SumLogprobs) {
 
   // Make sure each sequence has at least one EOT token at the end
-  std::vector<std::pair<int, int>> PadWidths = {{0, 0}, {0, 1}};
-  mx::array PaddedTokens = mx::pad(Tokens, PadWidths, mx::array({Eot}));
+  std::vector<std::pair<int, int>> PadWidths = {{0, 0}, {0, 0}, {0, 1}};
+  mx::array PaddedTokens =
+      mx::pad(Tokens, PadWidths, mx::array(Eot, mx::int32));
 
   return {PaddedTokens, SumLogprobs};
 }
@@ -189,7 +178,7 @@ GreedyDecoder::finalize(const mx::array &Tokens, const mx::array &SumLogprobs) {
 SuppressBlank::SuppressBlank(std::shared_ptr<::whisper::Tokenizer> Tokenizer,
                              int SampleBegin, int NVocab)
     : SampleBegin(SampleBegin), Mask(mx::zeros({NVocab}, mx::float32)) {
-
+  Name = "SuppressBlank";
   std::vector<float> MaskVec(NVocab, 0.0f);
 
   // Suppress space and EOT tokens
@@ -220,12 +209,10 @@ mx::array SuppressBlank::apply(const mx::array &Logits,
 SuppressTokens::SuppressTokens(const std::vector<int> &SuppressTokens,
                                int NVocab)
     : Mask(mx::zeros({NVocab}, mx::float32)) {
-
+  Name = "SuppressTokens";
   std::vector<float> MaskVec(NVocab, 0.0f);
   for (int Token : SuppressTokens) {
-    if (Token >= 0 && Token < NVocab) {
-      MaskVec[Token] = -std::numeric_limits<float>::infinity();
-    }
+    MaskVec[Token] = -std::numeric_limits<float>::infinity();
   }
 
   Mask = mx::array(MaskVec.data(), {NVocab}, mx::float32);
@@ -241,63 +228,142 @@ ApplyTimestampRules::ApplyTimestampRules(
     std::shared_ptr<::whisper::Tokenizer> Tokenizer, int SampleBegin,
     std::optional<int> MaxInitialTimestampIndex)
     : Tokenizer(Tokenizer), SampleBegin(SampleBegin),
-      MaxInitialTimestampIndex(MaxInitialTimestampIndex) {}
+      MaxInitialTimestampIndex(MaxInitialTimestampIndex) {
+  Name = "ApplyTimestampRules";
+}
 
 mx::array ApplyTimestampRules::apply(const mx::array &Logits,
                                      const mx::array &Tokens) {
   auto LogitsShape = Logits.shape();
-  std::vector<float> MaskVec(LogitsShape[0] * LogitsShape[1], 0.0f);
+  std::vector<float> MaskVec(Logits.size(), 0.0f);
 
-  for (int K = 0; K < LogitsShape[0]; ++K) {
-    auto TakeArray = mx::take(Tokens, K, 0);
-    std::vector<int> Start(TakeArray.shape().size(), 0);
-    std::vector<int> End = TakeArray.shape();
-    Start[0] = SampleBegin;
-    auto Sequence = slice(TakeArray, Start, End);
+  // Suppress <|notimestamps|> which is handled by without_timestamps
+  if (Tokenizer->getNoTimestamps()) {
+    for (int I = 0; I < LogitsShape[0]; ++I) {
+      MaskVec[I * LogitsShape[1] + Tokenizer->getNoTimestamps()] =
+          -std::numeric_limits<float>::infinity();
+    }
+  }
+
+  // Convert tokens to nested vectors like Python's tokens.tolist()
+  mx::eval(Tokens);
+  std::vector<std::vector<int>> TokensList(Tokens.shape(0));
+  for (int K = 0; K < Tokens.shape(0); ++K) {
+    TokensList[K].resize(Tokens.shape(1));
+    for (int J = 0; J < Tokens.shape(1); ++J) {
+      mx::array TokenVal = mx::take(mx::take(Tokens, K, 0), J, 0);
+      TokensList[K][J] = TokenVal.item<int>();
+    }
+  }
+
+  // Timestamps have to appear in pairs, except directly before EOT; mask logits
+  // accordingly
+  for (int K = 0; K < TokensList.size(); ++K) {
+    // Get sequence from sample_begin onwards like Python: seq =
+    // tokens[k][self.sample_begin :]
+    std::vector<int> Seq(TokensList[K].begin() + SampleBegin,
+                         TokensList[K].end());
 
     bool LastWasTimestamp =
-        Sequence.size() >= 1 &&
-        take(Sequence, Sequence.shape()[0] - 1, 0).item<float>() >=
-            Tokenizer->getTimestampBegin();
+        Seq.size() >= 1 &&
+        Seq[Seq.size() - 1] >= Tokenizer->getTimestampBegin();
     bool PenultimateWasTimestamp =
-        Sequence.size() < 2 ||
-        take(Sequence, Sequence.shape()[0] - 2, 0).item<float>() >=
-            Tokenizer->getTimestampBegin();
+        Seq.size() < 2 || Seq[Seq.size() - 2] >= Tokenizer->getTimestampBegin();
 
-    if (Tokens.shape(1) == SampleBegin) {
-      // Suppress generating non-timestamp tokens at the beginning
-      for (int I = 0; I < Tokenizer->getTimestampBegin(); ++I) {
-        MaskVec[K * LogitsShape[1] + I] =
-            -std::numeric_limits<float>::infinity();
-      }
-
-      if (MaxInitialTimestampIndex) {
-        int LastAllowed =
-            Tokenizer->getTimestampBegin() + *MaxInitialTimestampIndex;
-        for (int I = LastAllowed + 1; I < LogitsShape[1]; ++I) {
+    if (LastWasTimestamp) {
+      if (PenultimateWasTimestamp) {
+        // Has to be non-timestamp
+        for (int I = Tokenizer->getTimestampBegin(); I < LogitsShape[1]; ++I) {
+          MaskVec[K * LogitsShape[1] + I] =
+              -std::numeric_limits<float>::infinity();
+        }
+      } else {
+        // Cannot be normal text tokens
+        for (int I = 0; I < Tokenizer->getEot(); ++I) {
           MaskVec[K * LogitsShape[1] + I] =
               -std::numeric_limits<float>::infinity();
         }
       }
     }
 
-    if (LastWasTimestamp && PenultimateWasTimestamp) {
-      // Cannot be normal text tokens
-      for (int I = 0; I < Tokenizer->getEot(); ++I) {
-        MaskVec[K * LogitsShape[1] + I] =
-            -std::numeric_limits<float>::infinity();
+    // Find timestamps in sequence and enforce monotonicity
+    std::vector<int> Timestamps;
+    for (size_t I = 0; I < Seq.size(); ++I) {
+      if (Seq[I] > Tokenizer->getTimestampBegin()) {
+        Timestamps.push_back(Seq[I]);
       }
     }
 
-    if (Tokenizer->getNoTimestamps()) {
-      for (int I = 0; I < LogitsShape[0]; ++I) {
-        MaskVec[I * LogitsShape[1] + Tokenizer->getNoTimestamps()] =
+    if (!Timestamps.empty()) {
+      // Timestamps shouldn't decrease; forbid timestamp tokens smaller than the
+      // last Also force each segment to have a nonzero length, to prevent
+      // infinite looping
+      int LastTimestamp = Timestamps.back();
+      if (LastTimestamp == 0 || PenultimateWasTimestamp) {
+        LastTimestamp += 1;
+      }
+      for (int I = Tokenizer->getTimestampBegin(); I < LastTimestamp; ++I) {
+        MaskVec[K * LogitsShape[1] + I] =
             -std::numeric_limits<float>::infinity();
       }
     }
   }
 
+  if (TokensList[0].size() == SampleBegin) {
+    // Suppress generating non-timestamp tokens at the beginning
+    for (int I = 0; I < LogitsShape[0]; ++I) {
+      for (int J = 0; J < Tokenizer->getTimestampBegin(); ++J) {
+        MaskVec[I * LogitsShape[1] + J] =
+            -std::numeric_limits<float>::infinity();
+      }
+    }
+
+    // Apply the `max_initial_timestamp` option
+    if (MaxInitialTimestampIndex) {
+      int LastAllowed =
+          Tokenizer->getTimestampBegin() + *MaxInitialTimestampIndex;
+      for (int I = 0; I < LogitsShape[0]; ++I) {
+        for (int J = LastAllowed + 1; J < LogitsShape[1]; ++J) {
+          MaskVec[I * LogitsShape[1] + J] =
+              -std::numeric_limits<float>::infinity();
+        }
+      }
+    }
+  }
+
+  // If sum of probability over timestamps is above any other token, sample
+  // timestamp
   mx::array MaskArray = mx::array(MaskVec.data(), LogitsShape, mx::float32);
+  mx::array Logprobs = Logits - mx::logsumexp(Logits, -1, true);
+
+  // Calculate timestamp logprob: sum of probabilities for all timestamp tokens
+  mx::array TimestampLogprob =
+      mx::logsumexp(mx::slice(Logprobs, {0, Tokenizer->getTimestampBegin()},
+                              {LogitsShape[0], LogitsShape[1]}),
+                    -1, true);
+
+  // Calculate max text token logprob: max probability among non-timestamp
+  // tokens
+  mx::array MaxTextTokenLogprob =
+      mx::max(mx::slice(Logprobs, {0, 0},
+                        {LogitsShape[0], Tokenizer->getTimestampBegin()}),
+              -1, true);
+
+  // Where timestamp probability > max text probability, suppress text tokens
+  mx::array TimestampCondition =
+      mx::greater(TimestampLogprob, MaxTextTokenLogprob);
+
+  for (int I = 0; I < LogitsShape[0]; ++I) {
+    bool ShouldSuppressText = mx::take(TimestampCondition, I, 0).item<bool>();
+    if (ShouldSuppressText) {
+      for (int J = 0; J < Tokenizer->getTimestampBegin(); ++J) {
+        MaskVec[I * LogitsShape[1] + J] =
+            -std::numeric_limits<float>::infinity();
+      }
+    }
+  }
+
+  MaskArray = mx::array(MaskVec.data(), LogitsShape, mx::float32);
   return Logits + MaskArray;
 }
 
@@ -357,11 +423,6 @@ DecodingTask::DecodingTask(std::shared_ptr<Whisper> Model,
   }
 
   InitialTokens = getInitialTokens();
-  std::cout << "Initial tokens: ";
-  for(auto i : InitialTokens){
-    std::cout << i << " ";
-  }
-  std::cout << std::endl;
   SampleBegin = InitialTokens.size();
 
   // Find SOT index
@@ -497,6 +558,7 @@ std::vector<int> DecodingTask::getInitialTokens() {
 std::vector<int> DecodingTask::getSuppressTokens() {
   std::vector<int> SuppressTokens;
 
+  // Parse suppress_tokens from options - same logic as Python
   if (Options.SuppressTokens) {
     if (std::holds_alternative<std::string>(*Options.SuppressTokens)) {
       std::string TokensString = std::get<std::string>(*Options.SuppressTokens);
@@ -513,29 +575,42 @@ std::vector<int> DecodingTask::getSuppressTokens() {
     }
   }
 
-  // Handle -1 (non-speech tokens) - same logic as Python
+  // Handle different cases - exact Python logic
   auto Iterator = std::find(SuppressTokens.begin(), SuppressTokens.end(), -1);
   if (Iterator != SuppressTokens.end()) {
-    SuppressTokens.erase(Iterator);
+    // if -1 in suppress_tokens:
+    // suppress_tokens = [t for t in suppress_tokens if t >= 0]
+    SuppressTokens.erase(std::remove_if(SuppressTokens.begin(),
+                                        SuppressTokens.end(),
+                                        [](int Token) { return Token < 0; }),
+                         SuppressTokens.end());
+    // suppress_tokens.extend(self.tokenizer.non_speech_tokens)
     auto NonSpeechTokens = Tokenizer->getNonSpeechTokens();
     SuppressTokens.insert(SuppressTokens.end(), NonSpeechTokens.begin(),
                           NonSpeechTokens.end());
-  } else if (SuppressTokens.empty()) {
-    // Python: elif suppress_tokens is None or len(suppress_tokens) == 0:
-    // suppress_tokens = [] Already empty, nothing to do
+  } else if (!Options.SuppressTokens || SuppressTokens.empty()) {
+    // elif suppress_tokens is None or len(suppress_tokens) == 0:
+    // suppress_tokens = []  # interpret empty string as an empty list
+    SuppressTokens.clear(); // Already empty, but make it explicit
+  } else {
+    // else: assert isinstance(suppress_tokens, list), "suppress_tokens must be
+    // a list" In C++, we already ensured it's a vector<int>, so this is
+    // implicitly satisfied
   }
 
   // Add standard suppress tokens like Python version
+  // suppress_tokens.extend([...])
   SuppressTokens.push_back(Tokenizer->getTranscribe());
   SuppressTokens.push_back(Tokenizer->getTranslate());
   SuppressTokens.push_back(Tokenizer->getSot());
   SuppressTokens.push_back(Tokenizer->getSotPrev());
   SuppressTokens.push_back(Tokenizer->getSotLm());
 
-  // Add no_speech token if it exists
-  if (Tokenizer->getNoSpeech() != -1) { // Assuming -1 means not available
-    SuppressTokens.push_back(Tokenizer->getNoSpeech());
-  }
+  // Add no_speech token - it should always exist in whisper tokenizer
+  // Python: if self.tokenizer.no_speech is not None:
+  //         suppress_tokens.append(self.tokenizer.no_speech)
+  // In our implementation, no_speech always exists
+  SuppressTokens.push_back(Tokenizer->getNoSpeech());
 
   // Remove duplicates and sort like Python: sorted(set(suppress_tokens))
   std::sort(SuppressTokens.begin(), SuppressTokens.end());
@@ -611,16 +686,13 @@ DecodingTask::mainLoop(const mx::array &AudioFeatures,
       -> std::tuple<mx::array, bool, mx::array, mx::array> {
     mx::array PreLogits = Inference->logits(Inputs, AudioFeats);
     mx::array Logits = take(PreLogits, PreLogits.shape(1) - 1, 1);
-
     // Apply logit filters
     for (const auto &Filter : LogitFilters) {
       Logits = Filter->apply(Logits, TokSeq);
     }
-
     // Expand the tokens tensor with the selected next tokens
     auto [NextTokens, CompletedFlag, NextSumLogprobs] =
         Decoder->update(TokSeq, Logits, SumLogp);
-
     return std::make_tuple(NextTokens, CompletedFlag, NextSumLogprobs,
                            PreLogits);
   };
@@ -644,7 +716,6 @@ DecodingTask::mainLoop(const mx::array &AudioFeatures,
   }
 
   mx::eval(CurrentTokens, SumLogprobs, NoSpeechProbs);
-
   for (int I = 1; I < SampleLen; ++I) {
     mx::array Inputs =
         take(CurrentTokens, mx::array({CurrentTokens.shape(1) - 1}), 1);
@@ -652,13 +723,11 @@ DecodingTask::mainLoop(const mx::array &AudioFeatures,
     if (CurrentTokens.shape(-1) > NCtx) {
       break;
     }
-
     auto [NextToks, NextCompleted, NextSumLogp, _] =
         StepFunction(Inputs, AudioFeatures, CurrentTokens, SumLogprobs);
-
     mx::eval(NextToks, NextSumLogp);
 
-    if (NextCompleted) {
+    if (Completed) {
       break;
     }
 
@@ -673,7 +742,6 @@ DecodingTask::mainLoop(const mx::array &AudioFeatures,
 std::vector<DecodingResult> DecodingTask::run(const mx::array &Mel) {
   Inference->reset();
   Decoder->reset();
-
   int NAudio = Mel.shape(0);
 
   mx::array AudioFeatures = getAudioFeatures(Mel); // encoder forward pass
@@ -683,11 +751,8 @@ std::vector<DecodingResult> DecodingTask::run(const mx::array &Mel) {
   mx::array Tokens =
       mx::array(InitialTokens.data(), {static_cast<int>(InitialTokens.size())},
                 mx::int32);
-  debugArray(Tokens, "InitialTokens");
   Tokens = mx::broadcast_to(Tokens,
                             {NAudio, static_cast<int>(InitialTokens.size())});
-  debugArray(AudioFeatures, "AudioFeatures");
-  debugArray(Tokens, "InitialTokens");
   // Language detection - equivalent to Python's _detect_language
   auto [Languages, LangProbs] = detectLanguage(AudioFeatures, Tokens);
 
@@ -721,7 +786,6 @@ std::vector<DecodingResult> DecodingTask::run(const mx::array &Mel) {
     Tokens = mx::reshape(
         Tokens, {NAudio * NGroup, static_cast<int>(InitialTokens.size())});
   }
-
   // Call the main sampling loop
   auto [TokensResult, SumLogprobs, NoSpeechProbs] =
       mainLoop(AudioFeatures, Tokens);
@@ -741,20 +805,17 @@ std::vector<DecodingResult> DecodingTask::run(const mx::array &Mel) {
 
   TokensResult = mx::reshape(TokensResult, {NAudio, NGroup, -1});
   SumLogprobs = mx::reshape(SumLogprobs, {NAudio, NGroup});
-
   // Get the final candidates for each group, and slice between the first
   // sampled token and EOT
   auto [FinalizedTokens, FinalizedLogprobs] =
       Decoder->finalize(TokensResult, SumLogprobs);
 
-  // Slice tokens like Python: tokens[..., self.sample_begin:]
-  std::vector<int> SliceStart = {0, 0, SampleBegin};
-  std::vector<int> SliceEnd = {FinalizedTokens.shape(0),
-                               FinalizedTokens.shape(1),
-                               FinalizedTokens.shape(2)};
+  // tokens[..., self.sample_begin:]
+  std::vector<int> SliceStart(FinalizedTokens.ndim(), 0);
+  std::vector<int> SliceEnd = FinalizedTokens.shape();
+  SliceStart[FinalizedTokens.ndim() - 1] = SampleBegin;
   FinalizedTokens = mx::slice(FinalizedTokens, SliceStart, SliceEnd);
 
-  // Convert to vectors for processing like Python's tolist()
   mx::eval(FinalizedTokens, FinalizedLogprobs, NoSpeechProbs);
 
   // Convert tokens to nested vectors and handle EOT
@@ -768,7 +829,10 @@ std::vector<DecodingResult> DecodingTask::run(const mx::array &Mel) {
     for (int J = 0; J < NGroup; ++J) {
       // Extract tokens until EOT
       for (int K = 0; K < FinalizedTokens.shape(2); ++K) {
-        mx::array TokenArray = mx::take(FinalizedTokens, mx::array({I, J, K}));
+        int Dim1 = FinalizedTokens.shape(1) * FinalizedTokens.shape(2);
+        int Dim2 = FinalizedTokens.shape(2);
+        mx::array TokenArray =
+            mx::take(FinalizedTokens, mx::array({I * Dim1 + J * Dim2 + K}));
         int Token = TokenArray.item<int>();
         if (Token == Tokenizer->getEot())
           break;
@@ -776,7 +840,8 @@ std::vector<DecodingResult> DecodingTask::run(const mx::array &Mel) {
       }
 
       // Extract sum_logprobs
-      mx::array LogprobArray = mx::take(FinalizedLogprobs, mx::array({I, J}));
+      mx::array LogprobArray = mx::take(
+          FinalizedLogprobs, mx::array({I * FinalizedLogprobs.shape(1) + J}));
       SumLogprobsList[I][J] = LogprobArray.item<float>();
     }
   }
@@ -817,7 +882,7 @@ std::vector<DecodingResult> DecodingTask::run(const mx::array &Mel) {
   std::vector<DecodingResult> Results;
   for (int I = 0; I < NAudio; ++I) {
     DecodingResult Result;
-    Result.AudioFeatures = mx::take(AudioFeatures, mx::array({I}), 0);
+    Result.AudioFeatures = mx::take(AudioFeatures, I, 0);
     Result.Language = Languages[I];
     Result.Tokens = FinalTokens[I];
     Result.Text = Texts[I];
@@ -832,7 +897,6 @@ std::vector<DecodingResult> DecodingTask::run(const mx::array &Mel) {
     if (LangProbs) {
       Result.LanguageProbs = (*LangProbs)[I];
     }
-
     Results.push_back(Result);
   }
 
@@ -849,9 +913,7 @@ decode(std::shared_ptr<Whisper> Model, const mx::array &Mel,
     NewShape.insert(NewShape.begin(), 1);
     MelArray = mlx::core::reshape(Mel, NewShape);
   }
-  debugArray(Mel, "decode Mel");
   auto Results = DecodingTask(Model, Options).run(MelArray);
-  exit(0);
 
   if (Results.size() == 1) {
     return Results[0];

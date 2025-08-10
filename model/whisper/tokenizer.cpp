@@ -205,24 +205,85 @@ Encoding::Encoding(const std::string &Name, int ExplicitNVocab,
 }
 
 std::vector<int> Encoding::encode(const std::string &Text) const {
-  // Simplified encoding - in practice you'd implement BPE
   std::vector<int> Result;
 
-  // For now, just split by spaces and lookup in ranks
-  std::istringstream Iss(Text);
-  std::string Word;
-  while (Iss >> Word) {
-    auto It = MergeableRanks.find(Word);
-    if (It != MergeableRanks.end()) {
-      Result.push_back(It->second);
+  if (Text.empty()) {
+    return Result;
+  }
+
+  // Handle the simplified cases for symbols that are commonly in vocab
+  // First try to encode the text as a single token
+  auto DirectIt = MergeableRanks.find(Text);
+  if (DirectIt != MergeableRanks.end()) {
+    Result.push_back(DirectIt->second);
+    return Result;
+  }
+
+  // For complex text, we need a better approach than just splitting by spaces
+  // This is a more sophisticated approach that handles individual characters
+  // and symbols
+
+  size_t I = 0;
+  while (I < Text.length()) {
+    // Try to find the longest matching token starting at position I
+    std::string LongestMatch;
+    int LongestMatchToken = -1;
+
+    // Look for longest match from current position
+    for (size_t Len = std::min(Text.length() - I, size_t(10)); Len > 0; --Len) {
+      std::string Candidate = Text.substr(I, Len);
+      auto It = MergeableRanks.find(Candidate);
+      if (It != MergeableRanks.end()) {
+        LongestMatch = Candidate;
+        LongestMatchToken = It->second;
+        break; // Take the first (longest) match
+      }
+    }
+
+    if (LongestMatchToken != -1) {
+      Result.push_back(LongestMatchToken);
+      I += LongestMatch.length();
     } else {
-      // Handle unknown tokens by character encoding
-      for (char C : Word) {
-        std::string CharStr(1, C);
-        auto CharIt = MergeableRanks.find(CharStr);
-        if (CharIt != MergeableRanks.end()) {
-          Result.push_back(CharIt->second);
+      // If no match found, try single character
+      std::string SingleChar = Text.substr(I, 1);
+      auto CharIt = MergeableRanks.find(SingleChar);
+      if (CharIt != MergeableRanks.end()) {
+        Result.push_back(CharIt->second);
+      } else {
+        // Handle UTF-8 sequences - try to find multi-byte character
+        size_t CharLen = 1;
+        unsigned char FirstByte = static_cast<unsigned char>(Text[I]);
+        if ((FirstByte & 0x80) != 0) {
+          // UTF-8 multi-byte character
+          if ((FirstByte & 0xE0) == 0xC0)
+            CharLen = 2;
+          else if ((FirstByte & 0xF0) == 0xE0)
+            CharLen = 3;
+          else if ((FirstByte & 0xF8) == 0xF0)
+            CharLen = 4;
         }
+
+        if (I + CharLen <= Text.length()) {
+          std::string MultiByteChar = Text.substr(I, CharLen);
+          auto MultiIt = MergeableRanks.find(MultiByteChar);
+          if (MultiIt != MergeableRanks.end()) {
+            Result.push_back(MultiIt->second);
+            I += CharLen;
+            continue;
+          }
+        }
+
+        // If we still can't find it, encode as bytes
+        for (size_t J = 0; J < CharLen && I + J < Text.length(); ++J) {
+          unsigned char Byte = static_cast<unsigned char>(Text[I + J]);
+          // Try to find byte encoding - tiktoken often has byte-level tokens
+          std::string ByteStr(1, static_cast<char>(Byte));
+          auto ByteIt = MergeableRanks.find(ByteStr);
+          if (ByteIt != MergeableRanks.end()) {
+            Result.push_back(ByteIt->second);
+          }
+        }
+        I += CharLen;
       }
     }
   }
@@ -462,26 +523,35 @@ std::vector<int> Tokenizer::getSotSequenceIncludingNotimestamps() const {
 
 std::vector<int> Tokenizer::getNonSpeechTokens() const {
   if (!CachedNonSpeechTokens.has_value()) {
+    std::unordered_set<int> ResultSet;
+
+    // symbols = list('"#()*+/:;<=>@[\\]^_`{|}~「」『』')
     std::vector<std::string> Symbols = {"\"", "#", "(",  ")",  "*",  "+", "/",
                                         ":",  ";", "<",  "=",  ">",  "@", "[",
                                         "\\", "]", "^",  "_",  "`",  "{", "|",
                                         "}",  "~", "「", "」", "『", "』"};
 
-    std::vector<std::string> SymbolPhrases = {
+    // symbols += "<< >> <<< >>> -- --- -( -[ (' (\" (( )) ((( ))) [[ ]] {{ }}
+    // ♪♪ ♪♪♪".split()
+    std::vector<std::string> AdditionalSymbols = {
         "<<", ">>", "<<<", ">>>", "--", "---", "-(", "-[", "('", "(\"",
         "((", "))", "(((", ")))", "[[", "]]",  "{{", "}}", "♪♪", "♪♪♪"};
+    Symbols.insert(Symbols.end(), AdditionalSymbols.begin(),
+                   AdditionalSymbols.end());
 
-    std::string Miscellaneous = "♩♪♫♬♭♮♯";
+    // Miscellaneous symbols between U+2640 and U+267F
+    std::vector<std::string> Miscellaneous = {"♩", "♪", "♫", "♬",
+                                              "♭", "♮", "♯"};
 
-    std::unordered_set<int> ResultSet;
-
-    // Add hyphens and quotes at word boundaries
+    // Allow hyphens "-" and single quotes "'" between words, but not at the
+    // beginning
     try {
-      auto HyphenTokens = encode(" -");
-      if (!HyphenTokens.empty()) {
-        ResultSet.insert(HyphenTokens[0]);
+      auto DashTokens = EncodingPtr->encode(" -");
+      if (!DashTokens.empty()) {
+        ResultSet.insert(DashTokens[0]);
       }
-      auto QuoteTokens = encode(" '");
+
+      auto QuoteTokens = EncodingPtr->encode(" '");
       if (!QuoteTokens.empty()) {
         ResultSet.insert(QuoteTokens[0]);
       }
@@ -489,61 +559,41 @@ std::vector<int> Tokenizer::getNonSpeechTokens() const {
       // Ignore encoding errors
     }
 
-    // Add symbol tokens
-    for (const std::string &Symbol : Symbols) {
+    // Process all symbols
+    std::vector<std::string> AllSymbols = Symbols;
+    AllSymbols.insert(AllSymbols.end(), Miscellaneous.begin(),
+                      Miscellaneous.end());
+
+    for (const std::string &Symbol : AllSymbols) {
       try {
-        auto Tokens = encode(Symbol);
-        if (!Tokens.empty()) {
-          ResultSet.insert(Tokens[0]);
+        // Try encoding the symbol directly
+        auto DirectTokens = EncodingPtr->encode(Symbol);
+        bool IsMiscellaneous =
+            std::find(Miscellaneous.begin(), Miscellaneous.end(), Symbol) !=
+            Miscellaneous.end();
+
+        if (DirectTokens.size() == 1 || IsMiscellaneous) {
+          if (!DirectTokens.empty()) {
+            ResultSet.insert(DirectTokens[0]);
+          }
         }
-        auto SpaceTokens = encode(" " + Symbol);
-        if (!SpaceTokens.empty()) {
-          ResultSet.insert(SpaceTokens[0]);
+
+        // Try encoding the symbol with a space prefix
+        auto SpacedTokens = EncodingPtr->encode(" " + Symbol);
+        if (SpacedTokens.size() == 1 || IsMiscellaneous) {
+          if (!SpacedTokens.empty()) {
+            ResultSet.insert(SpacedTokens[0]);
+          }
         }
       } catch (...) {
-        // Ignore encoding errors
+        // Ignore encoding errors for individual symbols
       }
     }
 
-    for (const std::string &Phrase : SymbolPhrases) {
-      try {
-        auto Tokens = encode(Phrase);
-        if (!Tokens.empty()) {
-          ResultSet.insert(Tokens[0]);
-        }
-        auto SpaceTokens = encode(" " + Phrase);
-        if (!SpaceTokens.empty()) {
-          ResultSet.insert(SpaceTokens[0]);
-        }
-      } catch (...) {
-        // Ignore encoding errors
-      }
-    }
-
-    // Add miscellaneous symbols
-    for (char C : Miscellaneous) {
-      std::string Symbol(1, C);
-      try {
-        auto Tokens = encode(Symbol);
-        if (Tokens.size() == 1) {
-          ResultSet.insert(Tokens[0]);
-        } else if (!Tokens.empty()) {
-          ResultSet.insert(Tokens[0]);
-        }
-
-        auto SpaceTokens = encode(" " + Symbol);
-        if (SpaceTokens.size() == 1) {
-          ResultSet.insert(SpaceTokens[0]);
-        } else if (!SpaceTokens.empty()) {
-          ResultSet.insert(SpaceTokens[0]);
-        }
-      } catch (...) {
-        // Ignore encoding errors
-      }
-    }
-
+    // Convert set to sorted vector
     std::vector<int> Result(ResultSet.begin(), ResultSet.end());
     std::sort(Result.begin(), Result.end());
+
     CachedNonSpeechTokens = Result;
   }
   return CachedNonSpeechTokens.value();

@@ -29,9 +29,12 @@ struct DecodingOptions {
   std::optional<int> BeamSize = std::nullopt;
   std::optional<float> Patience = std::nullopt;
   std::optional<float> LengthPenalty = std::nullopt;
-  std::optional<std::variant<std::string, std::vector<int>>> Prompt = std::nullopt;
-  std::optional<std::variant<std::string, std::vector<int>>> Prefix = std::nullopt;
-  std::optional<std::variant<std::string, std::vector<int>>> SuppressTokens = "-1";
+  std::optional<std::variant<std::string, std::vector<int>>> Prompt =
+      std::nullopt;
+  std::optional<std::variant<std::string, std::vector<int>>> Prefix =
+      std::nullopt;
+  std::optional<std::variant<std::string, std::vector<int>>> SuppressTokens =
+      "-1";
   bool SuppressBlank = true;
   bool WithoutTimestamps = false;
   std::optional<float> MaxInitialTimestamp = 1.0f;
@@ -57,25 +60,30 @@ public:
   mx::array logits(const mx::array &Tokens, const mx::array &AudioFeatures);
   void rearrangeKvCache(const std::vector<int> &SourceIndices);
   void reset();
+
 private:
   std::shared_ptr<Whisper> Model;
-  std::optional<std::vector<std::pair<std::optional<std::pair<mx::array, mx::array>>, std::optional<std::pair<mx::array, mx::array>>>>> KvCache;
+  std::optional<
+      std::vector<std::pair<std::optional<std::pair<mx::array, mx::array>>,
+                            std::optional<std::pair<mx::array, mx::array>>>>>
+      KvCache = std::nullopt;
 };
 
 class SequenceRanker {
 public:
   virtual ~SequenceRanker() = default;
-  virtual std::vector<int> rank(
-      const std::vector<std::vector<std::vector<int>>> &Tokens,
-      const std::vector<std::vector<float>> &SumLogprobs) = 0;
+  virtual std::vector<int>
+  rank(const std::vector<std::vector<std::vector<int>>> &Tokens,
+       const std::vector<std::vector<float>> &SumLogprobs) = 0;
 };
 
 class MaximumLikelihoodRanker : public SequenceRanker {
 public:
   explicit MaximumLikelihoodRanker(std::optional<float> LengthPenalty);
-  std::vector<int> rank(
-      const std::vector<std::vector<std::vector<int>>> &Tokens,
-      const std::vector<std::vector<float>> &SumLogprobs) override;
+  std::vector<int>
+  rank(const std::vector<std::vector<std::vector<int>>> &Tokens,
+       const std::vector<std::vector<float>> &SumLogprobs) override;
+
 private:
   std::optional<float> LengthPenalty;
 };
@@ -84,20 +92,23 @@ class TokenDecoder {
 public:
   virtual ~TokenDecoder() = default;
   virtual void reset() = 0;
-  virtual std::tuple<mx::array, bool, mx::array> update(
-      const mx::array &Tokens, const mx::array &Logits, const mx::array &SumLogprobs) = 0;
-  virtual std::pair<mx::array, mx::array> finalize(
-      const mx::array &Tokens, const mx::array &SumLogprobs) = 0;
+  virtual std::tuple<mx::array, bool, mx::array>
+  update(const mx::array &Tokens, const mx::array &Logits,
+         const mx::array &SumLogprobs) = 0;
+  virtual std::pair<mx::array, mx::array>
+  finalize(const mx::array &Tokens, const mx::array &SumLogprobs) = 0;
 };
 
 class GreedyDecoder : public TokenDecoder {
 public:
   GreedyDecoder(float Temperature, int Eot);
   void reset() override;
-  std::tuple<mx::array, bool, mx::array> update(
-      const mx::array &Tokens, const mx::array &Logits, const mx::array &SumLogprobs) override;
-  std::pair<mx::array, mx::array> finalize(
-      const mx::array &Tokens, const mx::array &SumLogprobs) override;
+  std::tuple<mx::array, bool, mx::array>
+  update(const mx::array &Tokens, const mx::array &Logits,
+         const mx::array &SumLogprobs) override;
+  std::pair<mx::array, mx::array>
+  finalize(const mx::array &Tokens, const mx::array &SumLogprobs) override;
+
 private:
   float Temperature;
   int Eot;
@@ -107,12 +118,15 @@ class LogitFilter {
 public:
   virtual ~LogitFilter() = default;
   virtual mx::array apply(const mx::array &Logits, const mx::array &Tokens) = 0;
+  std::string Name = "LogitFilter";
 };
 
 class SuppressBlank : public LogitFilter {
 public:
-  SuppressBlank(std::shared_ptr<Tokenizer> Tokenizer, int SampleBegin, int NVocab);
+  SuppressBlank(std::shared_ptr<Tokenizer> Tokenizer, int SampleBegin,
+                int NVocab);
   mx::array apply(const mx::array &Logits, const mx::array &Tokens) override;
+
 private:
   int SampleBegin;
   mx::array Mask;
@@ -122,6 +136,7 @@ class SuppressTokens : public LogitFilter {
 public:
   SuppressTokens(const std::vector<int> &SuppressTokens, int NVocab);
   mx::array apply(const mx::array &Logits, const mx::array &Tokens) override;
+
 private:
   mx::array Mask;
 };
@@ -131,6 +146,7 @@ public:
   ApplyTimestampRules(std::shared_ptr<Tokenizer> Tokenizer, int SampleBegin,
                       std::optional<int> MaxInitialTimestampIndex);
   mx::array apply(const mx::array &Logits, const mx::array &Tokens) override;
+
 private:
   std::shared_ptr<Tokenizer> Tokenizer;
   int SampleBegin;
@@ -141,15 +157,17 @@ class DecodingTask {
 public:
   DecodingTask(std::shared_ptr<Whisper> Model, const DecodingOptions &Options);
   std::vector<DecodingResult> run(const mx::array &Mel);
+
 private:
   DecodingOptions verifyOptions(const DecodingOptions &Options);
   std::vector<int> getInitialTokens();
   std::vector<int> getSuppressTokens();
   mx::array getAudioFeatures(const mx::array &Mel);
-  std::pair<std::vector<std::string>, std::optional<std::vector<std::map<std::string, float>>>>
+  std::pair<std::vector<std::string>,
+            std::optional<std::vector<std::map<std::string, float>>>>
   detectLanguage(const mx::array &AudioFeatures, mx::array &Tokens);
-  std::tuple<mx::array, mx::array, mx::array> mainLoop(
-      const mx::array &AudioFeatures, const mx::array &Tokens);
+  std::tuple<mx::array, mx::array, mx::array>
+  mainLoop(const mx::array &AudioFeatures, const mx::array &Tokens);
   std::shared_ptr<Whisper> Model;
   std::shared_ptr<Tokenizer> Tokenizer;
   DecodingOptions Options;

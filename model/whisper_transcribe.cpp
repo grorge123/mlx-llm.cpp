@@ -259,7 +259,8 @@ std::optional<float> getEnd(const std::vector<TranscribeSegment> &Segments) {
 //   size_t CompressedSize = Compressed.size() - Stream.avail_out;
 //   deflateEnd(&Stream);
 
-//   return static_cast<float>(Data.size()) / static_cast<float>(CompressedSize);
+//   return static_cast<float>(Data.size()) /
+//   static_cast<float>(CompressedSize);
 // }
 
 // Language detection
@@ -346,12 +347,10 @@ decodeWithFallback(std::shared_ptr<whisper::Whisper> Model,
         Result.CompressionRatio > *CompressionRatioThreshold) {
       NeedsFallback = true;
     }
-    if(LogprobThreshold &&
-       Result.AvgLogprob < *LogprobThreshold) {
+    if (LogprobThreshold && Result.AvgLogprob < *LogprobThreshold) {
       NeedsFallback = true;
     }
-    if(NoSpeechThreshold &&
-       Result.NoSpeechProb > *NoSpeechThreshold) {
+    if (NoSpeechThreshold && Result.NoSpeechProb > *NoSpeechThreshold) {
       NeedsFallback = true;
     }
 
@@ -497,16 +496,24 @@ transcribe(const std::variant<std::string, mx::array> &Audio,
 
       auto MelSegment = padOrTrim(Mel, DefaultNFrames, -2);
       MelSegment = mx::astype(MelSegment, Dtype);
-      auto [LangTokens, LangProbs] =
-          detectLanguage(Model, MelSegment);
+      auto [LangTokens, LangProbs] = detectLanguage(Model, MelSegment);
 
-      // Find most probable language (simplified)
-      Options.Language = "en"; // Default fallback
+      // Find most probable language from the detection results
+      if (!LangProbs.empty() && !LangProbs[0].empty()) {
+        // Find language with highest probability
+        auto MaxIterator = std::max_element(
+            LangProbs[0].begin(), LangProbs[0].end(),
+            [](const auto &A, const auto &B) { return A.second < B.second; });
+        Options.Language = MaxIterator->first;
+      } else {
+        Options.Language = "en"; // Default fallback only if detection failed
+      }
 
       if (Verbose.value_or(false)) {
-        auto It = LANGUAGES.find(*Options.Language);
-        std::string LangName =
-            (It != LANGUAGES.end()) ? It->second : *Options.Language;
+        std::string LangName = findLanguageByCode(*Options.Language);
+        if (LangName.empty()) {
+          LangName = *Options.Language; // fallback to code if not found
+        }
         std::cout << "Detected language: " << LangName << std::endl;
       }
     }
@@ -514,7 +521,7 @@ transcribe(const std::variant<std::string, mx::array> &Audio,
 
   auto Task = Options.Task;
   auto Tokenizer = getTokenizer(Model->isMultilingual(), Model->numLanguages(),
-                          *Options.Language, Task);
+                                *Options.Language, Task);
 
   // Parse clip timestamps
   std::vector<float> ClipTimes;

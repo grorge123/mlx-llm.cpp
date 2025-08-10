@@ -124,12 +124,10 @@ MultiHeadAttention::qkvAttention(const mx::array &Q, const mx::array &K,
 
   // Reshape and transpose for multi-head attention
   mx::array QReshaped = reshape(Q, {Q.shape(0), Q.shape(1), NHead, -1});
-  // QReshaped = transpose(QReshaped, {0, 2, 1, 3}) * Scale;
-  QReshaped = transpose(QReshaped, {0, 2, 1, 3});
+  QReshaped = transpose(QReshaped, {0, 2, 1, 3}) * Scale;
 
   mx::array KReshaped = reshape(K, {K.shape(0), K.shape(1), NHead, -1});
-  // KReshaped = transpose(KReshaped, {0, 2, 3, 1}) * Scale;
-  KReshaped = transpose(KReshaped, {0, 2, 3, 1});
+  KReshaped = transpose(KReshaped, {0, 2, 3, 1}) * Scale;
 
   mx::array VReshaped = reshape(V, {V.shape(0), V.shape(1), NHead, -1});
   VReshaped = transpose(VReshaped, {0, 2, 1, 3});
@@ -307,8 +305,10 @@ TextDecoder::forward(
   std::vector<int> End = Parameters.at("positional_embedding").shape();
   Start[0] = Offset;
   End[0] = Offset + X.shape(-1);
+
   mx::array Result = TokenEmbedding->forward(X) +
                      slice(Parameters.at("positional_embedding"), Start, End);
+
   std::vector<std::pair<std::optional<std::pair<mx::array, mx::array>>,
                         std::optional<std::pair<mx::array, mx::array>>>>
       NewKvCache;
