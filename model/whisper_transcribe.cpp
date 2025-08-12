@@ -351,7 +351,7 @@ decodeWithFallback(std::shared_ptr<whisper::Whisper> Model,
       NeedsFallback = true;
     }
     if (NoSpeechThreshold && Result.NoSpeechProb > *NoSpeechThreshold) {
-      NeedsFallback = true;
+      NeedsFallback = false;
     }
 
     if (!NeedsFallback) {
@@ -565,6 +565,7 @@ transcribe(const std::variant<std::string, mx::array> &Audio,
   std::vector<int32_t> AllTokens;
   std::vector<TranscribeSegment> AllSegments;
   // prompt_reset_since
+  int PromptResetSince = 0;
 
   if (InitialPrompt) {
     auto PromptTokens = Tokenizer->encode(" " + *InitialPrompt);
@@ -578,11 +579,21 @@ transcribe(const std::variant<std::string, mx::array> &Audio,
     Temperatures = std::get<std::vector<float>>(Temperature);
   }
 
+  // Derived timing parameters matching Python
+  const int InputStride = DefaultNFrames / Model->Dims.NAudioCtx; // 2 for tiny
+  const float TimePrecision =
+      static_cast<float>(InputStride * DefaultHopLength) / DefaultSampleRate;
+  const int FramesPerSecond = DefaultFramesPerSecond;
+
   // Processing loop
+  float LastSpeechTimestamp = 0.0f;
   for (const auto &[SeekClipStart, SeekClipEnd] : SeekClips) {
     while (Seek < SeekClipEnd) {
       float TimeOffset =
           static_cast<float>(Seek * DefaultHopLength) / DefaultSampleRate;
+      float WindowEndTime = static_cast<float>((Seek + DefaultNFrames) *
+                                               DefaultHopLength) /
+                            DefaultSampleRate;
       int SegmentSize =
           std::min({DefaultNFrames, ContentFrames - Seek, SeekClipEnd - Seek});
 
@@ -596,46 +607,267 @@ transcribe(const std::variant<std::string, mx::array> &Audio,
       MelSegment = mx::astype(MelSegment, Dtype);
 
       // Decode segment
+      // Provide prompt tokens since last reset
+      {
+        std::vector<int> PromptSlice;
+        if (PromptResetSince >= 0 &&
+            PromptResetSince <= static_cast<int>(AllTokens.size())) {
+          PromptSlice.assign(AllTokens.begin() + PromptResetSince,
+                             AllTokens.end());
+        }
+        Options.Prompt = PromptSlice; // empty slice allowed (adds sot_prev)
+      }
+
       auto Result = decodeWithFallback(Model, MelSegment, Options, Temperatures,
                                        Tokenizer, CompressionRatioThreshold,
                                        LogprobThreshold, NoSpeechThreshold);
 
-      // Create segment
-      TranscribeSegment Segment;
-      Segment.Id = AllSegments.size();
-      Segment.Seek = Seek;
-      Segment.Start = TimeOffset;
-      Segment.End =
-          TimeOffset + static_cast<float>(SegmentSize * DefaultHopLength) /
-                           DefaultSampleRate;
-      Segment.Text = Result.Text;
-      Segment.Tokens = Result.Tokens;
-      Segment.Temperature = Result.Temperature;
-      Segment.AvgLogprob = Result.AvgLogprob;
-      Segment.CompressionRatio = Result.CompressionRatio;
-      Segment.NoSpeechProb = Result.NoSpeechProb;
-
-      // Add word timestamps if requested
-      if (WordTimestamps) {
-        std::vector<TranscribeSegment> TempSegments = {Segment};
-        addWordTimestamps(TempSegments, Model, Tokenizer, MelSegment,
-                          SegmentSize, PrependPunctuations, AppendPunctuations);
-        Segment.Words = TempSegments[0].Words;
+      // Voice activity check and fast-forward if silence
+      if (NoSpeechThreshold) {
+        bool ShouldSkip = Result.NoSpeechProb > *NoSpeechThreshold;
+        if (LogprobThreshold && Result.AvgLogprob > *LogprobThreshold) {
+          ShouldSkip = false;
+        }
+        if (ShouldSkip) {
+          Seek += SegmentSize;
+          continue;
+        }
       }
 
-      // Add to results
-      AllSegments.push_back(Segment);
-      AllTokens.insert(AllTokens.end(), Result.Tokens.begin(),
-                       Result.Tokens.end());
+      // Prepare tokens for timestamp analysis
+      const auto &TokVec = Result.Tokens;
+      std::vector<bool> TimestampMask(TokVec.size(), false);
+      int TsBegin = Tokenizer->getTimestampBegin();
+      for (size_t I = 0; I < TokVec.size(); ++I) {
+        TimestampMask[I] = TokVec[I] >= TsBegin;
+      }
 
-      // Update seek position
-      Seek += SegmentSize;
+      bool SingleTimestampEnding = false;
+      if (TimestampMask.size() >= 2) {
+        SingleTimestampEnding = (!TimestampMask[TimestampMask.size() - 2] &&
+                                 TimestampMask.back());
+      }
 
-      // Verbose output
+      // Find consecutive timestamp pairs
+      std::vector<int> ConsecutiveIdx;
+      for (int I = 1; I < static_cast<int>(TimestampMask.size()); ++I) {
+        if (TimestampMask[I - 1] && TimestampMask[I]) {
+          ConsecutiveIdx.push_back(I);
+        }
+      }
+
+      std::vector<TranscribeSegment> CurrentSegments;
+      auto NewSegmentFromSlice = [&](int LastSliceIdx, int CurrentSliceIdx,
+                                     float StartBase, float EndBase) {
+        std::vector<int> SliceTokens;
+        SliceTokens.insert(SliceTokens.end(), TokVec.begin() + LastSliceIdx,
+                           TokVec.begin() + CurrentSliceIdx);
+        if (SliceTokens.empty())
+          return; // nothing to add
+        int StartTsPos = SliceTokens.front() - TsBegin;
+        int EndTsPos = SliceTokens.back() - TsBegin;
+        TranscribeSegment S;
+        S.Id = static_cast<int>(AllSegments.size() + CurrentSegments.size());
+        S.Seek = Seek;
+        S.Start = StartBase + StartTsPos * TimePrecision;
+        S.End = StartBase + EndTsPos * TimePrecision;
+        // text only from tokens < eot
+        std::vector<int> TextTokens;
+        int Eot = Tokenizer->getEot();
+        for (int Tok : SliceTokens) {
+          if (Tok < Eot)
+            TextTokens.push_back(Tok);
+        }
+        S.Text = Tokenizer->decode(TextTokens);
+        S.Tokens.assign(SliceTokens.begin(), SliceTokens.end());
+        S.Temperature = Result.Temperature;
+        S.AvgLogprob = Result.AvgLogprob;
+        S.CompressionRatio = Result.CompressionRatio;
+        S.NoSpeechProb = Result.NoSpeechProb;
+        CurrentSegments.push_back(std::move(S));
+      };
+
+      if (!ConsecutiveIdx.empty()) {
+        std::vector<int> Slices = ConsecutiveIdx;
+        if (SingleTimestampEnding) {
+          Slices.push_back(static_cast<int>(TokVec.size()));
+        }
+
+        int LastSlice = 0;
+        for (int Cur : Slices) {
+          NewSegmentFromSlice(LastSlice, Cur, TimeOffset, TimeOffset);
+          LastSlice = Cur;
+        }
+
+        if (SingleTimestampEnding) {
+          // no speech after the last timestamp
+          Seek += SegmentSize;
+        } else {
+          int LastTimestampPos = TokVec[Slices.back() - 1] - TsBegin;
+          Seek += LastTimestampPos * InputStride;
+        }
+      } else {
+        // No consecutive timestamp tokens
+        float SegmentDuration = static_cast<float>(SegmentSize * DefaultHopLength) /
+                                DefaultSampleRate;
+        int LastTsIndex = -1;
+        for (int I = static_cast<int>(TokVec.size()) - 1; I >= 0; --I) {
+          if (TimestampMask[I]) {
+            LastTsIndex = I;
+            break;
+          }
+        }
+        if (LastTsIndex != -1 && TokVec[LastTsIndex] != TsBegin) {
+          int LastTsPos = TokVec[LastTsIndex] - TsBegin;
+          SegmentDuration = LastTsPos * TimePrecision;
+        }
+
+        // Create one segment for the whole window
+        TranscribeSegment S;
+        S.Id = static_cast<int>(AllSegments.size());
+        S.Seek = Seek;
+        S.Start = TimeOffset;
+        S.End = TimeOffset + SegmentDuration;
+        // text from tokens < eot
+        std::vector<int> TextTokens;
+        int Eot = Tokenizer->getEot();
+        for (int Tok : TokVec) {
+          if (Tok < Eot)
+            TextTokens.push_back(Tok);
+        }
+        S.Text = Tokenizer->decode(TextTokens);
+        S.Tokens = TokVec;
+        S.Temperature = Result.Temperature;
+        S.AvgLogprob = Result.AvgLogprob;
+        S.CompressionRatio = Result.CompressionRatio;
+        S.NoSpeechProb = Result.NoSpeechProb;
+        CurrentSegments.push_back(std::move(S));
+
+        Seek += SegmentSize;
+      }
+
+      // Word-level timestamps and hallucination handling
+      if (WordTimestamps) {
+  addWordTimestamps(CurrentSegments, Model, Tokenizer, MelSegment,
+        SegmentSize, PrependPunctuations, AppendPunctuations,
+        LastSpeechTimestamp);
+
+        if (!SingleTimestampEnding) {
+          auto LastWordEndOpt = getEnd(CurrentSegments);
+          if (LastWordEndOpt && *LastWordEndOpt > TimeOffset) {
+            Seek = static_cast<int>(std::round((*LastWordEndOpt) * FramesPerSecond));
+          }
+        }
+
+        if (HallucinationSilenceThreshold) {
+          float Threshold = *HallucinationSilenceThreshold;
+          if (!SingleTimestampEnding) {
+            auto LastWordEndOpt = getEnd(CurrentSegments);
+            if (LastWordEndOpt && *LastWordEndOpt > TimeOffset) {
+              float Remaining = WindowEndTime - *LastWordEndOpt;
+              if (Remaining > Threshold) {
+                Seek = static_cast<int>(
+                    std::round((*LastWordEndOpt) * FramesPerSecond));
+              } else {
+                // keep default seek progression
+              }
+            }
+          }
+
+          // if first segment might be a hallucination, skip leading silence
+          auto FirstWithWords = nextWordsSegment(CurrentSegments);
+          if (FirstWithWords && isSegmentAnomaly(FirstWithWords)) {
+            float Gap = FirstWithWords->Start - TimeOffset;
+            if (Gap > Threshold) {
+              int NewSeek = static_cast<int>(
+                  std::round(static_cast<double>(Seek) + Gap * FramesPerSecond));
+              Seek = NewSeek;
+              // restart loop
+              continue;
+            }
+          }
+
+          // skip silence before any possible hallucination surrounded by silence
+          float HalLastEnd = LastSpeechTimestamp;
+          for (size_t Si = 0; Si < CurrentSegments.size(); ++Si) {
+            auto &Seg = CurrentSegments[Si];
+            if (Seg.Words.empty())
+              continue;
+            std::optional<TranscribeSegment> SegOpt = Seg;
+            if (isSegmentAnomaly(SegOpt)) {
+              std::optional<TranscribeSegment> NextSeg = std::nullopt;
+              for (size_t J = Si + 1; J < CurrentSegments.size(); ++J) {
+                if (!CurrentSegments[J].Words.empty()) {
+                  NextSeg = CurrentSegments[J];
+                  break;
+                }
+              }
+              float HalNextStart = NextSeg ? NextSeg->Words.front().Start
+                                           : TimeOffset +
+                                                 static_cast<float>(SegmentSize *
+                                                                    DefaultHopLength) /
+                                                   DefaultSampleRate;
+              bool SilenceBefore = (Seg.Start - HalLastEnd > Threshold) ||
+                                   (Seg.Start < Threshold) ||
+                                   (Seg.Start - TimeOffset < 2.0f);
+              bool SilenceAfter = (HalNextStart - Seg.End > Threshold) ||
+                                  isSegmentAnomaly(NextSeg) ||
+                                  (WindowEndTime - Seg.End < 2.0f);
+              if (SilenceBefore && SilenceAfter) {
+                Seek = static_cast<int>(std::round(
+                    std::max(TimeOffset + 1.0f, Seg.Start) * FramesPerSecond));
+                float RemainingContent = ContentDuration - Seg.End;
+                if (RemainingContent < Threshold) {
+                  Seek = ContentFrames;
+                }
+                // drop subsequent segments
+                CurrentSegments.resize(Si);
+                break;
+              }
+            }
+            HalLastEnd = Seg.End;
+          }
+        }
+
+        // update last_speech_timestamp
+        auto LastWordEndOpt = getEnd(CurrentSegments);
+        if (LastWordEndOpt) {
+          LastSpeechTimestamp = *LastWordEndOpt;
+        }
+      }
+
+      // Verbose output for each segment
       if (Verbose.value_or(false)) {
-        std::cout << "[" << formatTimestamp(Segment.Start) << " --> "
-                  << formatTimestamp(Segment.End) << "] " << Segment.Text
-                  << std::endl;
+        for (const auto &S : CurrentSegments) {
+          std::cout << "[" << formatTimestamp(S.Start) << " --> "
+                    << formatTimestamp(S.End) << "] " << S.Text << std::endl;
+        }
+      }
+
+      // Clean instantaneous or empty segments
+      for (auto &S : CurrentSegments) {
+        auto Trimmed = S.Text;
+        // trim whitespace
+        Trimmed.erase(0, Trimmed.find_first_not_of(" \t\n\r\f\v"));
+        if (!Trimmed.empty())
+          Trimmed.erase(Trimmed.find_last_not_of(" \t\n\r\f\v") + 1);
+        if (S.Start == S.End || Trimmed.empty()) {
+          S.Text.clear();
+          S.Tokens.clear();
+          S.Words.clear();
+        }
+      }
+
+      // Add to results and accumulate tokens
+      for (auto &S : CurrentSegments) {
+        S.Id = static_cast<int>(AllSegments.size());
+        AllSegments.push_back(S);
+        AllTokens.insert(AllTokens.end(), S.Tokens.begin(), S.Tokens.end());
+      }
+
+      // Prompt reset logic
+      if (!ConditionOnPreviousText || Result.Temperature > 0.5f) {
+        PromptResetSince = static_cast<int>(AllTokens.size());
       }
     }
   }
