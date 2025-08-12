@@ -132,7 +132,6 @@ void GreedyDecoder::reset() {
 std::tuple<mx::array, bool, mx::array>
 GreedyDecoder::update(const mx::array &Tokens, const mx::array &Logits,
                       const mx::array &SumLogprobs) {
-  int NBatch = Tokens.shape(0);
 
   // Sample next tokens
   mx::array NextTokens = mx::array({});
@@ -175,7 +174,7 @@ GreedyDecoder::finalize(const mx::array &Tokens, const mx::array &SumLogprobs) {
 }
 
 // SuppressBlank implementation
-SuppressBlank::SuppressBlank(std::shared_ptr<::whisper::Tokenizer> Tokenizer,
+SuppressBlank::SuppressBlank(std::shared_ptr<whisper::Tokenizer> Tokenizer,
                              int SampleBegin, int NVocab)
     : SampleBegin(SampleBegin), Mask(mx::zeros({NVocab}, mx::float32)) {
   Name = "SuppressBlank";
@@ -225,7 +224,7 @@ mx::array SuppressTokens::apply(const mx::array &Logits,
 
 // ApplyTimestampRules implementation
 ApplyTimestampRules::ApplyTimestampRules(
-    std::shared_ptr<::whisper::Tokenizer> Tokenizer, int SampleBegin,
+    std::shared_ptr<whisper::Tokenizer> Tokenizer, int SampleBegin,
     std::optional<int> MaxInitialTimestampIndex)
     : Tokenizer(Tokenizer), SampleBegin(SampleBegin),
       MaxInitialTimestampIndex(MaxInitialTimestampIndex) {
@@ -245,7 +244,6 @@ mx::array ApplyTimestampRules::apply(const mx::array &Logits,
     }
   }
 
-  // Convert tokens to nested vectors like Python's tokens.tolist()
   mx::eval(Tokens);
   std::vector<std::vector<int>> TokensList(Tokens.shape(0));
   for (int K = 0; K < Tokens.shape(0); ++K) {
@@ -258,9 +256,8 @@ mx::array ApplyTimestampRules::apply(const mx::array &Logits,
 
   // Timestamps have to appear in pairs, except directly before EOT; mask logits
   // accordingly
-  for (int K = 0; K < TokensList.size(); ++K) {
-    // Get sequence from sample_begin onwards like Python: seq =
-    // tokens[k][self.sample_begin :]
+  for (int K = 0; K < static_cast<int>(TokensList.size()); ++K) {
+    // seq = tokens[k][self.sample_begin :]
     std::vector<int> Seq(TokensList[K].begin() + SampleBegin,
                          TokensList[K].end());
 
@@ -309,7 +306,7 @@ mx::array ApplyTimestampRules::apply(const mx::array &Logits,
     }
   }
 
-  if (TokensList[0].size() == SampleBegin) {
+  if (static_cast<int>(TokensList[0].size()) == SampleBegin) {
     // Suppress generating non-timestamp tokens at the beginning
     for (int I = 0; I < LogitsShape[0]; ++I) {
       for (int J = 0; J < Tokenizer->getTimestampBegin(); ++J) {
@@ -407,7 +404,6 @@ DecodingTask::DecodingTask(std::shared_ptr<Whisper> Model,
                            const DecodingOptions &Options)
     : Model(Model), Options(verifyOptions(Options)) {
 
-  // Initialize tokenizer - equivalent to Python's get_tokenizer() call
   std::string Language = Options.Language.value_or("en");
   Tokenizer = whisper::getTokenizer(
       Model->isMultilingual(), Model->numLanguages(), Language, Options.Task);
@@ -432,7 +428,7 @@ DecodingTask::DecodingTask(std::shared_ptr<Whisper> Model,
   SotIndex = std::distance(InitialTokens.begin(), Iterator);
 
   // Initialize components
-  Inference = std::make_unique<::whisper::Inference>(Model);
+  Inference = std::make_unique<whisper::Inference>(Model);
   SequenceRanker =
       std::make_unique<MaximumLikelihoodRanker>(Options.LengthPenalty);
 
@@ -442,8 +438,7 @@ DecodingTask::DecodingTask(std::shared_ptr<Whisper> Model,
   Decoder =
       std::make_unique<GreedyDecoder>(Options.Temperature, Tokenizer->getEot());
 
-  // Initialize logit filters in the same order as Python
-  LogitFilters.clear(); // Make sure we start clean
+  LogitFilters.clear();
 
   if (Options.SuppressBlank) {
     LogitFilters.push_back(std::make_unique<SuppressBlank>(
@@ -452,7 +447,7 @@ DecodingTask::DecodingTask(std::shared_ptr<Whisper> Model,
 
   if (Options.SuppressTokens) {
     auto SuppressTokens = getSuppressTokens();
-    LogitFilters.push_back(std::make_unique<::whisper::SuppressTokens>(
+    LogitFilters.push_back(std::make_unique<whisper::SuppressTokens>(
         SuppressTokens, Model->Dims.NVocab));
   }
 
@@ -505,7 +500,6 @@ std::vector<int> DecodingTask::getInitialTokens() {
     std::vector<int> PrefixTokens;
     if (std::holds_alternative<std::string>(*Options.Prefix)) {
       std::string PrefixStr = std::get<std::string>(*Options.Prefix);
-      // Add space prefix like Python: " " + prefix.strip()
       PrefixTokens = Tokenizer->encode(" " + PrefixStr);
     } else {
       PrefixTokens = std::get<std::vector<int>>(*Options.Prefix);
@@ -514,14 +508,11 @@ std::vector<int> DecodingTask::getInitialTokens() {
     if (SampleLen > 0) {
       int MaxPrefixLen = NCtx / 2 - SampleLen;
       if (static_cast<int>(PrefixTokens.size()) > MaxPrefixLen) {
-        // Take last MaxPrefixLen tokens like Python:
-        // prefix_tokens[-max_prefix_len:]
         PrefixTokens = std::vector<int>(PrefixTokens.end() - MaxPrefixLen,
                                         PrefixTokens.end());
       }
     }
 
-    // Append prefix tokens: tokens = tokens + prefix_tokens
     Tokens.insert(Tokens.end(), PrefixTokens.begin(), PrefixTokens.end());
   }
 
@@ -529,7 +520,6 @@ std::vector<int> DecodingTask::getInitialTokens() {
     std::vector<int> PromptTokens;
     if (std::holds_alternative<std::string>(*Options.Prompt)) {
       std::string PromptStr = std::get<std::string>(*Options.Prompt);
-      // Add space prefix like Python: " " + prompt.strip()
       PromptTokens = Tokenizer->encode(" " + PromptStr);
     } else {
       PromptTokens = std::get<std::vector<int>>(*Options.Prompt);
@@ -537,14 +527,10 @@ std::vector<int> DecodingTask::getInitialTokens() {
 
     int MaxPromptLen = NCtx / 2 - 1;
     if (static_cast<int>(PromptTokens.size()) > MaxPromptLen) {
-      // Take last MaxPromptLen tokens like Python: prompt_tokens[-(n_ctx // 2 -
-      // 1):]
       PromptTokens = std::vector<int>(PromptTokens.end() - MaxPromptLen,
                                       PromptTokens.end());
     }
 
-    // Prepend sot_prev and prompt tokens, then append original tokens
-    // Python: [tokenizer.sot_prev] + prompt_tokens + tokens
     std::vector<int> NewTokens;
     NewTokens.push_back(Tokenizer->getSotPrev());
     NewTokens.insert(NewTokens.end(), PromptTokens.begin(), PromptTokens.end());
@@ -558,11 +544,9 @@ std::vector<int> DecodingTask::getInitialTokens() {
 std::vector<int> DecodingTask::getSuppressTokens() {
   std::vector<int> SuppressTokens;
 
-  // Parse suppress_tokens from options - same logic as Python
   if (Options.SuppressTokens) {
     if (std::holds_alternative<std::string>(*Options.SuppressTokens)) {
       std::string TokensString = std::get<std::string>(*Options.SuppressTokens);
-      // Split by comma like Python version
       std::istringstream Iss(TokensString);
       std::string TokenString;
       while (std::getline(Iss, TokenString, ',')) {
@@ -575,44 +559,29 @@ std::vector<int> DecodingTask::getSuppressTokens() {
     }
   }
 
-  // Handle different cases - exact Python logic
   auto Iterator = std::find(SuppressTokens.begin(), SuppressTokens.end(), -1);
   if (Iterator != SuppressTokens.end()) {
-    // if -1 in suppress_tokens:
-    // suppress_tokens = [t for t in suppress_tokens if t >= 0]
     SuppressTokens.erase(std::remove_if(SuppressTokens.begin(),
                                         SuppressTokens.end(),
                                         [](int Token) { return Token < 0; }),
                          SuppressTokens.end());
-    // suppress_tokens.extend(self.tokenizer.non_speech_tokens)
     auto NonSpeechTokens = Tokenizer->getNonSpeechTokens();
     SuppressTokens.insert(SuppressTokens.end(), NonSpeechTokens.begin(),
                           NonSpeechTokens.end());
   } else if (!Options.SuppressTokens || SuppressTokens.empty()) {
-    // elif suppress_tokens is None or len(suppress_tokens) == 0:
-    // suppress_tokens = []  # interpret empty string as an empty list
-    SuppressTokens.clear(); // Already empty, but make it explicit
+    SuppressTokens.clear();
   } else {
-    // else: assert isinstance(suppress_tokens, list), "suppress_tokens must be
-    // a list" In C++, we already ensured it's a vector<int>, so this is
-    // implicitly satisfied
+    assumingUnreachable();
   }
 
-  // Add standard suppress tokens like Python version
-  // suppress_tokens.extend([...])
   SuppressTokens.push_back(Tokenizer->getTranscribe());
   SuppressTokens.push_back(Tokenizer->getTranslate());
   SuppressTokens.push_back(Tokenizer->getSot());
   SuppressTokens.push_back(Tokenizer->getSotPrev());
   SuppressTokens.push_back(Tokenizer->getSotLm());
 
-  // Add no_speech token - it should always exist in whisper tokenizer
-  // Python: if self.tokenizer.no_speech is not None:
-  //         suppress_tokens.append(self.tokenizer.no_speech)
-  // In our implementation, no_speech always exists
   SuppressTokens.push_back(Tokenizer->getNoSpeech());
 
-  // Remove duplicates and sort like Python: sorted(set(suppress_tokens))
   std::sort(SuppressTokens.begin(), SuppressTokens.end());
   SuppressTokens.erase(
       std::unique(SuppressTokens.begin(), SuppressTokens.end()),
@@ -648,7 +617,7 @@ DecodingTask::detectLanguage(const mx::array &AudioFeatures,
   if (!Options.Language || Options.Task == "lang_id") {
     // Call the global detectLanguage function
     auto [DetectedLanguageTokens, Probabilities] =
-        ::whisper::detectLanguage(Model, AudioFeatures, Tokenizer);
+        whisper::detectLanguage(Model, AudioFeatures, Tokenizer);
 
     Languages.clear();
     for (const auto &ProbsMap : Probabilities) {
@@ -680,24 +649,20 @@ DecodingTask::mainLoop(const mx::array &AudioFeatures,
   mx::array SumLogprobs = mx::zeros({NBatch}, mx::float32);
   bool Completed = false;
 
-  // Step function equivalent to Python's _step
   auto StepFunction = [&](const mx::array &Inputs, const mx::array &AudioFeats,
                           const mx::array &TokSeq, const mx::array &SumLogp)
       -> std::tuple<mx::array, bool, mx::array, mx::array> {
     mx::array PreLogits = Inference->logits(Inputs, AudioFeats);
     mx::array Logits = take(PreLogits, PreLogits.shape(1) - 1, 1);
-    // Apply logit filters
     for (const auto &Filter : LogitFilters) {
       Logits = Filter->apply(Logits, TokSeq);
     }
-    // Expand the tokens tensor with the selected next tokens
     auto [NextTokens, CompletedFlag, NextSumLogprobs] =
         Decoder->update(TokSeq, Logits, SumLogp);
     return std::make_tuple(NextTokens, CompletedFlag, NextSumLogprobs,
                            PreLogits);
   };
 
-  // First step - equivalent to Python's initial _step call
   auto [NextTokens, CompletedFlag, NextSumLogprobs, PreLogits] =
       StepFunction(CurrentTokens, AudioFeatures, CurrentTokens, SumLogprobs);
 
@@ -705,7 +670,6 @@ DecodingTask::mainLoop(const mx::array &AudioFeatures,
   SumLogprobs = NextSumLogprobs;
   Completed = CompletedFlag;
 
-  // Compute no_speech_probs like Python
   mx::array NoSpeechProbs = mx::zeros({NBatch}, mx::float32);
   if (Tokenizer->getNoSpeech() != -1) {
     auto ProbsAtSot = mx::softmax(mx::take(PreLogits, SotIndex, 1), -1);
@@ -744,19 +708,15 @@ std::vector<DecodingResult> DecodingTask::run(const mx::array &Mel) {
   Decoder->reset();
   int NAudio = Mel.shape(0);
 
-  mx::array AudioFeatures = getAudioFeatures(Mel); // encoder forward pass
+  mx::array AudioFeatures = getAudioFeatures(Mel);
 
-  // Prepare initial tokens - equivalent to Python's
-  // mx.array(self.initial_tokens)
   mx::array Tokens =
       mx::array(InitialTokens.data(), {static_cast<int>(InitialTokens.size())},
                 mx::int32);
   Tokens = mx::broadcast_to(Tokens,
                             {NAudio, static_cast<int>(InitialTokens.size())});
-  // Language detection - equivalent to Python's _detect_language
   auto [Languages, LangProbs] = detectLanguage(AudioFeatures, Tokens);
 
-  // Early return for lang_id task like Python
   if (Options.Task == "lang_id") {
     std::vector<DecodingResult> Results;
     for (int I = 0; I < NAudio; ++I) {
@@ -771,7 +731,6 @@ std::vector<DecodingResult> DecodingTask::run(const mx::array &Mel) {
     return Results;
   }
 
-  // Handle n_group > 1 for beam search or best-of-n sampling like Python
   if (NGroup > 1) {
     // tokens = tokens[:, None, :]
     Tokens = mx::expand_dims(Tokens, 1);
@@ -846,7 +805,6 @@ std::vector<DecodingResult> DecodingTask::run(const mx::array &Mel) {
     }
   }
 
-  // Select the top-ranked sample in each group like Python
   std::vector<int> Selected = SequenceRanker->rank(TokensList, SumLogprobsList);
 
   // Extract final results
@@ -860,21 +818,17 @@ std::vector<DecodingResult> DecodingTask::run(const mx::array &Mel) {
     FinalTokens[I] = TokensList[I][SelectedIdx];
     Texts[I] = Tokenizer->decode(FinalTokens[I]);
 
-    // Strip whitespace like Python
     Texts[I].erase(0, Texts[I].find_first_not_of(" \t\n\r\f\v"));
     Texts[I].erase(Texts[I].find_last_not_of(" \t\n\r\f\v") + 1);
 
     FinalSumLogprobs[I] = SumLogprobsList[I][SelectedIdx];
-    AvgLogprobs[I] =
-        FinalSumLogprobs[I] /
-        (FinalTokens[I].size() + 1); // like Python: lp / (len(t) + 1)
+    AvgLogprobs[I] = FinalSumLogprobs[I] / (FinalTokens[I].size() + 1);
   }
 
-  // Check field consistency like Python
   if (Texts.size() != Languages.size() ||
       Languages.size() != FinalTokens.size() ||
       FinalTokens.size() != AvgLogprobs.size() ||
-      AvgLogprobs.size() != NAudio) {
+      static_cast<int>(AvgLogprobs.size()) != NAudio) {
     throw std::runtime_error("inconsistent result lengths");
   }
 
@@ -911,7 +865,7 @@ decode(std::shared_ptr<Whisper> Model, const mx::array &Mel,
   if (Mel.ndim() == 2) {
     auto NewShape = Mel.shape();
     NewShape.insert(NewShape.begin(), 1);
-    MelArray = mlx::core::reshape(Mel, NewShape);
+    MelArray = reshape(Mel, NewShape);
   }
   auto Results = DecodingTask(Model, Options).run(MelArray);
 

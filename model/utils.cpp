@@ -65,7 +65,7 @@ std::string loadBytesFromFile(const std::string &Path) {
   return Data;
 }
 
-void fillPlaceholders(std::ostringstream &oss, const std::string &fmt,
-                      size_t &pos) {
-  oss << fmt.substr(pos);
+void fillPlaceholders(std::ostringstream &Oss, const std::string &Fmt,
+                      size_t &Pos) {
+  Oss << Fmt.substr(Pos);
 }

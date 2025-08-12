@@ -16,48 +16,48 @@ void saveWeights(const mx::array &Weights, const std::string &Path);
 
 std::string loadBytesFromFile(const std::string &Path);
 
-void fillPlaceholders(std::ostringstream &oss, const std::string &fmt,
-                      size_t &pos);
+void fillPlaceholders(std::ostringstream &Oss, const std::string &Fmt,
+                      size_t &Pos);
 
-template <typename T> std::string toString(const T &value) {
-  std::ostringstream oss;
-  oss << value;
-  return oss.str();
+template <typename T> std::string toString(const T &Value) {
+  std::ostringstream Oss;
+  Oss << Value;
+  return Oss.str();
 }
 
-template <typename T> std::string toString(const std::vector<T> &vec) {
-  std::ostringstream oss;
-  oss << "[";
-  for (size_t i = 0; i < vec.size(); i++) {
-    oss << toString(vec[i]);
-    if (i + 1 < vec.size()) {
-      oss << ", ";
+template <typename T> std::string toString(const std::vector<T> &Vec) {
+  std::ostringstream Oss;
+  Oss << "[";
+  for (size_t I = 0; I < Vec.size(); I++) {
+    Oss << toString(Vec[I]);
+    if (I + 1 < Vec.size()) {
+      Oss << ", ";
     }
   }
-  oss << "]";
-  return oss.str();
+  Oss << "]";
+  return Oss.str();
 }
 
 template <typename T, typename... Args>
-void fillPlaceholders(std::ostringstream &oss, const std::string &fmt,
-                      size_t &pos, T &&value, Args &&...args) {
-  auto placeholderPos = fmt.find("{}", pos);
-  if (placeholderPos == std::string::npos) {
-    oss << fmt.substr(pos);
+void fillPlaceholders(std::ostringstream &Oss, const std::string &Fmt,
+                      size_t &Pos, T &&Value, Args &&...args) {
+  auto PlaceholderPos = Fmt.find("{}", Pos);
+  if (PlaceholderPos == std::string::npos) {
+    Oss << Fmt.substr(Pos);
     return;
   }
-  oss << fmt.substr(pos, placeholderPos - pos);
-  oss << toString(value);
-  pos = placeholderPos + 2;
-  fillPlaceholders(oss, fmt, pos, std::forward<Args>(args)...);
+  Oss << Fmt.substr(Pos, PlaceholderPos - Pos);
+  Oss << toString(Value);
+  Pos = PlaceholderPos + 2;
+  fillPlaceholders(Oss, Fmt, Pos, std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-std::string formatStr(const std::string &fmt, Args &&...args) {
-  std::ostringstream oss;
-  size_t pos = 0;
-  fillPlaceholders(oss, fmt, pos, std::forward<Args>(args)...);
-  return oss.str();
+std::string formatStr(const std::string &Fmt, Args &&...args) {
+  std::ostringstream Oss;
+  size_t Pos = 0;
+  fillPlaceholders(Oss, Fmt, Pos, std::forward<Args>(args)...);
+  return Oss.str();
 }
 
 template <typename... Args> void debug(const std::string &fmt, Args &&...args) {

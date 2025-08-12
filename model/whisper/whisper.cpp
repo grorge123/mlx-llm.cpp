@@ -93,8 +93,8 @@ MultiHeadAttention::forward(
     K = Key->forward(X);
     V = Value->forward(X);
     if (KvCache.has_value()) {
-      K = mx::concatenate({KvCache->first, K}, /*axis=*/1);
-      V = mx::concatenate({KvCache->second, V}, /*axis=*/1);
+      K = mx::concatenate({KvCache->first, K}, 1);
+      V = mx::concatenate({KvCache->second, V}, 1);
     }
   } else if (!KvCache.has_value()) {
     // Cross-attention without cache
@@ -210,8 +210,8 @@ ResidualAttentionBlock::forward(
     NewCrossKv = TempCrossKv;
     CrossQk = TempCrossQk;
   }
-  Result =
-      Result + Mlp2->forward(mx::gelu(Mlp1->forward(MlpLn->forward(Result))));
+  Result = Result + Mlp2->forward(
+                        mlx::core::gelu(Mlp1->forward(MlpLn->forward(Result))));
   return {Result, {NewKv, NewCrossKv}, CrossQk};
 }
 
@@ -243,9 +243,9 @@ mx::array AudioEncoder::forward(const mx::array &X) {
   auto Conv2 = std::dynamic_pointer_cast<nn::Conv1d>(Submodules["conv2"]);
   auto LnPost = std::dynamic_pointer_cast<nn::LayerNorm>(Submodules["ln_post"]);
   mx::array Result = Conv1->forward(X);
-  Result = mx::gelu(Result);
+  Result = mlx::core::gelu(Result);
   Result = Conv2->forward(Result);
-  Result = mx::gelu(Result);
+  Result = mlx::core::gelu(Result);
   assert(Result.shape()[1] == PositionalEmbedding.shape()[0] &&
          Result.shape()[2] == PositionalEmbedding.shape()[1]);
 

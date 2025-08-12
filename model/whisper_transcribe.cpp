@@ -7,7 +7,6 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
-#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <memory>
@@ -20,9 +19,6 @@
 #include <zlib.h>
 
 namespace whisper {
-
-// Remove duplicate LANGUAGES definition since it's now in tokenizer.h
-// Remove duplicate LANGUAGES definition since it's now in tokenizer.h
 
 mx::array loadAudio(const std::string &FilePath, int SampleRate) {
   int Channels = 1;
@@ -78,7 +74,6 @@ mx::array loadAudio(const std::string &FilePath, int SampleRate) {
     AudioArray = mx::reshape(AudioArray, {Frames, Channels});
   }
 
-  // Convert to float32 and normalize by 32768.0 (not 32767.0 like Python)
   mx::array FloatAudio = mx::astype(AudioArray, mx::float32) / 32768.0f;
 
   return FloatAudio;
@@ -126,7 +121,7 @@ mx::array stft(const mx::array &X, const mx::array &Window, int NPerseg = 256,
       return mx::pad(X, PadWidths);
     }
     if (PadMode == "reflect") {
-      // Reflect padding like Python: prefix = x[1:padding+1][::-1]
+      // x[1:padding+1][::-1]
       std::vector<int> Start(X.shape().size(), 0);
       std::vector<int> End = X.shape();
       std::vector<int> Strides(X.shape().size(), 1);
@@ -175,7 +170,7 @@ mx::array logMelSpectrogram(const mx::array &Audio, int NMels, int Padding) {
   auto Window = hanningWindow(DefaultNFft);
   auto Freqs = stft(PaddedAudio, Window, DefaultNFft, DefaultHopLength,
                     DefaultNFft, "reflect");
-  // Get magnitudes and square them - match Python: freqs[:-1, :].abs().square()
+  // freqs[:-1, :].abs().square()
   std::vector<int> Start = {0, 0};
   std::vector<int> End = {static_cast<int>(Freqs.shape(0) - 1),
                           static_cast<int>(Freqs.shape(1))};
@@ -185,7 +180,6 @@ mx::array logMelSpectrogram(const mx::array &Audio, int NMels, int Padding) {
   // Apply mel filters
   auto Filters = melFilters(NMels);
   auto MelSpec = mx::matmul(Magnitudes, mx::transpose(Filters));
-  // Convert to log scale - match Python exactly
   auto LogSpec =
       mx::log10(mx::maximum(MelSpec, mx::full(MelSpec.shape(), 1e-10f)));
   LogSpec = mx::maximum(LogSpec, mx::max(LogSpec) - 8.0f);
@@ -231,80 +225,6 @@ std::optional<float> getEnd(const std::vector<TranscribeSegment> &Segments) {
   return Segments.empty() ? std::nullopt
                           : std::make_optional(Segments.back().End);
 }
-
-// float compressionRatio(const std::string &Text) {
-//   std::vector<uint8_t> Data(Text.begin(), Text.end());
-
-//   // Simple compression ratio using zlib
-//   z_stream Stream;
-//   Stream.zalloc = Z_NULL;
-//   Stream.zfree = Z_NULL;
-//   Stream.opaque = Z_NULL;
-
-//   if (deflateInit(&Stream, Z_DEFAULT_COMPRESSION) != Z_OK) {
-//     return 1.0f;
-//   }
-
-//   std::vector<uint8_t> Compressed(Data.size() * 2);
-//   Stream.next_in = Data.data();
-//   Stream.avail_in = Data.size();
-//   Stream.next_out = Compressed.data();
-//   Stream.avail_out = Compressed.size();
-
-//   if (deflate(&Stream, Z_FINISH) != Z_STREAM_END) {
-//     deflateEnd(&Stream);
-//     return 1.0f;
-//   }
-
-//   size_t CompressedSize = Compressed.size() - Stream.avail_out;
-//   deflateEnd(&Stream);
-
-//   return static_cast<float>(Data.size()) /
-//   static_cast<float>(CompressedSize);
-// }
-
-// Language detection
-// std::pair<mx::array, std::vector<std::map<std::string, float>>>
-// detectLanguage(std::shared_ptr<whisper::Whisper> Model, const mx::array &Mel,
-//                std::shared_ptr<whisper::Tokenizer> Tokenizer) {
-//   if (!Tokenizer) {
-//     Tokenizer = getTokenizer(Model->isMultilingual(), Model->numLanguages());
-//   }
-//   debugArray(Mel, "detectLanguage Mel");
-//   bool Single = Mel.ndim() == 2;
-//   mx::array MelBatch = Single ? mx::expand_dims(Mel, 0) : Mel;
-//   debugArray(MelBatch, "detectLanguage MelBatch");
-//   // Skip encoder if already encoded
-//   mx::array AudioFeatures = (MelBatch.shape(-2) != Model->Dims.NAudioCtx ||
-//                              MelBatch.shape(-1) != Model->Dims.NAudioState)
-//                                 ? Model->embedAudio(MelBatch)
-//                                 : MelBatch;
-//   debugArray(AudioFeatures, "detectLanguage AudioFeatures");
-//   // Forward pass with start of transcript token
-//   int NAudio = AudioFeatures.shape(0);
-
-//   // Get SOT token from tokenizer
-//   int SotToken = Tokenizer->getSot();
-//   auto X = mx::full({NAudio, 1}, SotToken, mx::int32);
-//   auto Logits = Model->logits(X, AudioFeatures);
-//   auto Indices = mx::array({0}, mx::int32);
-//   Logits = mx::take(Logits, Indices, 1); // Take first token logits
-//   debugArray(Logits, "detectLanguage Logits");
-
-//   // Apply language token mask (simplified)
-//   auto LanguageTokens = mx::argmax(Logits, -1);
-//   auto LanguageProbs = mx::softmax(Logits, -1);
-
-//   // Convert to output format
-//   std::vector<std::map<std::string, float>> ResultProbs(NAudio);
-
-//   if (Single) {
-//     LanguageTokens = mx::take(LanguageTokens, mx::array({0}), 0);
-//     ResultProbs.resize(1);
-//   }
-
-//   return {LanguageTokens, ResultProbs};
-// }
 
 // Decoding functions
 DecodingResult
@@ -384,7 +304,8 @@ void addWordTimestamps(std::vector<TranscribeSegment> &Segments,
       std::string Word;
       int WordIdx = 0;
 
-      while (Iss >> Word && WordIdx < Segment.Tokens.size()) {
+      while (Iss >> Word &&
+             static_cast<size_t>(WordIdx) < Segment.Tokens.size()) {
         WordInfo WordInfo;
         WordInfo.Word = Word;
         WordInfo.Start = Segment.Start + WordIdx * TimePerToken;
@@ -579,7 +500,6 @@ transcribe(const std::variant<std::string, mx::array> &Audio,
     Temperatures = std::get<std::vector<float>>(Temperature);
   }
 
-  // Derived timing parameters matching Python
   const int InputStride = DefaultNFrames / Model->Dims.NAudioCtx; // 2 for tiny
   const float TimePrecision =
       static_cast<float>(InputStride * DefaultHopLength) / DefaultSampleRate;
@@ -591,9 +511,9 @@ transcribe(const std::variant<std::string, mx::array> &Audio,
     while (Seek < SeekClipEnd) {
       float TimeOffset =
           static_cast<float>(Seek * DefaultHopLength) / DefaultSampleRate;
-      float WindowEndTime = static_cast<float>((Seek + DefaultNFrames) *
-                                               DefaultHopLength) /
-                            DefaultSampleRate;
+      float WindowEndTime =
+          static_cast<float>((Seek + DefaultNFrames) * DefaultHopLength) /
+          DefaultSampleRate;
       int SegmentSize =
           std::min({DefaultNFrames, ContentFrames - Seek, SeekClipEnd - Seek});
 
@@ -644,8 +564,8 @@ transcribe(const std::variant<std::string, mx::array> &Audio,
 
       bool SingleTimestampEnding = false;
       if (TimestampMask.size() >= 2) {
-        SingleTimestampEnding = (!TimestampMask[TimestampMask.size() - 2] &&
-                                 TimestampMask.back());
+        SingleTimestampEnding =
+            (!TimestampMask[TimestampMask.size() - 2] && TimestampMask.back());
       }
 
       // Find consecutive timestamp pairs
@@ -708,8 +628,9 @@ transcribe(const std::variant<std::string, mx::array> &Audio,
         }
       } else {
         // No consecutive timestamp tokens
-        float SegmentDuration = static_cast<float>(SegmentSize * DefaultHopLength) /
-                                DefaultSampleRate;
+        float SegmentDuration =
+            static_cast<float>(SegmentSize * DefaultHopLength) /
+            DefaultSampleRate;
         int LastTsIndex = -1;
         for (int I = static_cast<int>(TokVec.size()) - 1; I >= 0; --I) {
           if (TimestampMask[I]) {
@@ -748,14 +669,15 @@ transcribe(const std::variant<std::string, mx::array> &Audio,
 
       // Word-level timestamps and hallucination handling
       if (WordTimestamps) {
-  addWordTimestamps(CurrentSegments, Model, Tokenizer, MelSegment,
-        SegmentSize, PrependPunctuations, AppendPunctuations,
-        LastSpeechTimestamp);
+        addWordTimestamps(CurrentSegments, Model, Tokenizer, MelSegment,
+                          SegmentSize, PrependPunctuations, AppendPunctuations,
+                          LastSpeechTimestamp);
 
         if (!SingleTimestampEnding) {
           auto LastWordEndOpt = getEnd(CurrentSegments);
           if (LastWordEndOpt && *LastWordEndOpt > TimeOffset) {
-            Seek = static_cast<int>(std::round((*LastWordEndOpt) * FramesPerSecond));
+            Seek = static_cast<int>(
+                std::round((*LastWordEndOpt) * FramesPerSecond));
           }
         }
 
@@ -779,15 +701,16 @@ transcribe(const std::variant<std::string, mx::array> &Audio,
           if (FirstWithWords && isSegmentAnomaly(FirstWithWords)) {
             float Gap = FirstWithWords->Start - TimeOffset;
             if (Gap > Threshold) {
-              int NewSeek = static_cast<int>(
-                  std::round(static_cast<double>(Seek) + Gap * FramesPerSecond));
+              int NewSeek = static_cast<int>(std::round(
+                  static_cast<double>(Seek) + Gap * FramesPerSecond));
               Seek = NewSeek;
               // restart loop
               continue;
             }
           }
 
-          // skip silence before any possible hallucination surrounded by silence
+          // skip silence before any possible hallucination surrounded by
+          // silence
           float HalLastEnd = LastSpeechTimestamp;
           for (size_t Si = 0; Si < CurrentSegments.size(); ++Si) {
             auto &Seg = CurrentSegments[Si];
@@ -802,11 +725,11 @@ transcribe(const std::variant<std::string, mx::array> &Audio,
                   break;
                 }
               }
-              float HalNextStart = NextSeg ? NextSeg->Words.front().Start
-                                           : TimeOffset +
-                                                 static_cast<float>(SegmentSize *
-                                                                    DefaultHopLength) /
-                                                   DefaultSampleRate;
+              float HalNextStart =
+                  NextSeg ? NextSeg->Words.front().Start
+                          : TimeOffset + static_cast<float>(SegmentSize *
+                                                            DefaultHopLength) /
+                                             DefaultSampleRate;
               bool SilenceBefore = (Seg.Start - HalLastEnd > Threshold) ||
                                    (Seg.Start < Threshold) ||
                                    (Seg.Start - TimeOffset < 2.0f);

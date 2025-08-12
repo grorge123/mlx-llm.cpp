@@ -1,4 +1,5 @@
 #include "tokenizer.h"
+#include "base.h"
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -189,7 +190,7 @@ Encoding::Encoding(const std::string &Name, int ExplicitNVocab,
                    const std::string &PatStr,
                    const std::unordered_map<std::string, int> &MergeableRanks,
                    const std::unordered_map<std::string, int> &SpecialTokens)
-    : Name(Name), ExplicitNVocab(ExplicitNVocab), PatStr(PatStr),
+    : Name(Name), PatStr(PatStr),
       MergeableRanks(MergeableRanks), SpecialTokens(SpecialTokens) {
 
   EotToken = 50257; // Default EOT token
@@ -525,38 +526,28 @@ std::vector<int> Tokenizer::getNonSpeechTokens() const {
   if (!CachedNonSpeechTokens.has_value()) {
     std::unordered_set<int> ResultSet;
 
-    // symbols = list('"#()*+/:;<=>@[\\]^_`{|}~「」『』')
     std::vector<std::string> Symbols = {"\"", "#", "(",  ")",  "*",  "+", "/",
                                         ":",  ";", "<",  "=",  ">",  "@", "[",
                                         "\\", "]", "^",  "_",  "`",  "{", "|",
                                         "}",  "~", "「", "」", "『", "』"};
 
-    // symbols += "<< >> <<< >>> -- --- -( -[ (' (\" (( )) ((( ))) [[ ]] {{ }}
-    // ♪♪ ♪♪♪".split()
     std::vector<std::string> AdditionalSymbols = {
         "<<", ">>", "<<<", ">>>", "--", "---", "-(", "-[", "('", "(\"",
         "((", "))", "(((", ")))", "[[", "]]",  "{{", "}}", "♪♪", "♪♪♪"};
     Symbols.insert(Symbols.end(), AdditionalSymbols.begin(),
                    AdditionalSymbols.end());
 
-    // Miscellaneous symbols between U+2640 and U+267F
     std::vector<std::string> Miscellaneous = {"♩", "♪", "♫", "♬",
                                               "♭", "♮", "♯"};
 
-    // Allow hyphens "-" and single quotes "'" between words, but not at the
-    // beginning
-    try {
-      auto DashTokens = EncodingPtr->encode(" -");
-      if (!DashTokens.empty()) {
-        ResultSet.insert(DashTokens[0]);
-      }
+    auto DashTokens = EncodingPtr->encode(" -");
+    if (!DashTokens.empty()) {
+      ResultSet.insert(DashTokens[0]);
+    }
 
-      auto QuoteTokens = EncodingPtr->encode(" '");
-      if (!QuoteTokens.empty()) {
-        ResultSet.insert(QuoteTokens[0]);
-      }
-    } catch (...) {
-      // Ignore encoding errors
+    auto QuoteTokens = EncodingPtr->encode(" '");
+    if (!QuoteTokens.empty()) {
+      ResultSet.insert(QuoteTokens[0]);
     }
 
     // Process all symbols
@@ -708,12 +699,9 @@ std::unique_ptr<Encoding> getEncoding(const std::string &Name,
   std::vector<std::string> Specials = {"<|endoftext|>",
                                        "<|startoftranscript|>"};
 
-  // Add language tokens in the same order as defined in LANGUAGES vector
-  // This preserves Python LANGUAGES dict insertion order
   for (const auto &[Code, Name] : LANGUAGES) {
     Specials.push_back("<|" + Code + "|>");
-    if (static_cast<int>(Specials.size()) >=
-        NumLanguages + 2) // +2 for endoftext and startoftranscript
+    if (static_cast<int>(Specials.size()) >= NumLanguages + 2)
       break;
   }
 
