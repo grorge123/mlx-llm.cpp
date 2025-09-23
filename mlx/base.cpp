@@ -49,7 +49,7 @@ void Module::apply(std::string Key, mx::array Value) {
   } else {
     std::string LayerName = SplitKey[0];
     SplitKey.erase(SplitKey.begin());
-    if (LayerName == "layers") {
+    if (LayerName == "layers" || LayerName == "blocks") {
       LayerName += "." + SplitKey[0];
       SplitKey.erase(SplitKey.begin());
     }
@@ -76,40 +76,36 @@ Module::getWeigts(const std::string &Prefix) {
 
 } // namespace mlx::core::nn
 
-// mx::array asContiguousArray(const mx::array &X) {
-//   if (X.buffer_size() == X.nbytes()) {
-//     return X;
-//   }
-
-//   mx::array contiguous = mx::empty(X.shape(), X.dtype());
-//   // 透過 assign 或 copy 方法將 X 的數值複製進新 array 中，保證按照 row-major
-//   的順序複製 contiguous.assign(X); return contiguous;
-// }
-
 uint64_t fnv1aHash(const mx::array &X) {
-  std::string fileName = "./temp_array.npy";
-  mx::save(fileName.c_str(), X);
-  std::string Command = "python3.10 ../hash_script.py " + fileName;
+  std::string FileName = "./temp_array.npy";
+  mx::save(FileName.c_str(), X);
+  std::string Command = "python3.10 ../hash_script.py " + FileName;
 
-  // 透過 popen 呼叫外部程序讀取 Python 腳本的輸出
-  FILE *pipe = popen(Command.c_str(), "r");
-  if (!pipe) {
+  FILE *Pipe = popen(Command.c_str(), "r");
+  if (!Pipe) {
     throw std::runtime_error("Failed to open pipe for Python script.");
   }
 
-  // 讀取 pipe 中的輸出（hash 值）
-  char buffer[128];
-  std::string result;
-  while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-    result += buffer;
+  char Buffer[128];
+  std::string Result;
+  while (fgets(Buffer, sizeof(Buffer), Pipe) != nullptr) {
+    Result += Buffer;
   }
-  pclose(pipe);
+  pclose(Pipe);
 
-  // 將結果字串轉換成 uint64_t
   try {
-    uint64_t hashVal = std::stoull(result);
-    return hashVal;
+    uint64_t HashVal = std::stoull(Result);
+    return HashVal;
   } catch (const std::exception &e) {
     throw std::runtime_error("Failed to parse hash value from Python output.");
   }
+}
+
+void debugArray(const mx::array &X, const std::string &Name) {
+  std::cout << Name << " shape: (";
+  for (auto &Shape : X.shape()) {
+    std::cout << Shape << " ";
+  }
+  std::cout << ") ";
+  std::cout << fnv1aHash(X) << std::endl;
 }

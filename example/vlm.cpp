@@ -11,8 +11,8 @@
 int main() {
   // std::string ModelPath = "../../Llama-3.2-11B-Vision-Instruct-4bit/";
   // auto Model = mllama::Model::fromPretrained(ModelPath, {64, 4});
-  // std::string ModelPath = "../../gemma-3-4b-it-bf16";
-  std::string ModelPath = "../../gemma-3-4b-pt-4bit";
+  std::string ModelPath = "../../gemma-3-4b-it-bf16";
+  // std::string ModelPath = "../../gemma-3-4b-pt-4bit";
   auto Model = gemma3::Model::fromPretrained(ModelPath);
   auto InputIds = mx::load("../example/input_ids.npy");
   auto PixelValues = mx::load("../example/pixel_values.npy");

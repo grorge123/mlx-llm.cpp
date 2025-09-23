@@ -1,7 +1,9 @@
+.vscode/
 build/
 .cache/
 cmake-build-debug
 .idea
 *.safetensors
 *.gguf
-tokenizer*
+tokenizer*.json
+whisper_py
