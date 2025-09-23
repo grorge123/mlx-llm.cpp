@@ -1,6 +1,6 @@
 # MLX-LLM.cpp
 
-MLX-LLM.cpp is a C/C++ library for LLM inference, based on [mlx-llm](https://github.com/riccardomusmeci/mlx-llm). It leverages [MLX](https://github.com/ml-explore/mlx) to run on Apple Silicon.
+MLX-LLM.cpp is a C/C++ library for LLM, VLM, whisper inference. It leverages [MLX](https://github.com/ml-explore/mlx) to run on Apple Silicon.
 
 ## Supported Models
 
@@ -9,6 +9,8 @@ MLX-LLM.cpp is a C/C++ library for LLM inference, based on [mlx-llm](https://git
 | LLaMA 2 | llama_2_7b_chat_hf |
 | LLaMA 3 | llama_3_8b |
 | TinyLLaMA | tiny_llama_1.1B_chat_v1.0 |
+| whisper | whiper | 
+| gemma3| gemma |
 
 ## Installation
 
@@ -43,7 +45,7 @@ cmake --build .
 
 ## Usage
 
-Refer to `example/main.cpp` for a simple demonstration using TinyLLaMA 1.1B.
+Refer to `example/llm.cpp` for a simple demonstration using TinyLLaMA 1.1B.
 
 ### Downloading Model Weights and Tokenizer
 
@@ -59,7 +61,7 @@ wget https://huggingface.co/TinyLlama/TinyLlama-1.1B-Chat-v1.0/resolve/main/toke
 From the `build` directory:
 
 ```bash
-./main
+./llm
 ```
 
 This will generate results using the TinyLLaMA 1.1B model.
