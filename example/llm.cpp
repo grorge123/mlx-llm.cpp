@@ -25,7 +25,7 @@ int main() {
   // auto Tok =
   //     Tokenizer::FromBlobJSON(loadBytesFromFile("../tokenizer-llama3.json"));
   auto Tok =
-      Tokenizer::FromBlobJSON(loadBytesFromFile("../tokenizer-tiny.json"));
+      Tokenizer::FromBlobJSON(loadBytesFromFile("../tiny/tokenizer-tiny.json"));
   const int MaxToken = 512;
   spdlog::info("Create Model...");
   // auto Model = llm::llama38b();
