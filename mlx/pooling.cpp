@@ -1,5 +1,6 @@
 #include "pooling.h"
 #include "base.h"
+#include "mlx_compat.h"
 #include "spdlog/spdlog.h"
 #include <cstdint>
 #include <mlx/array.h>
@@ -32,9 +33,9 @@ makePadShape(const std::vector<std::pair<int, int>> &Padding, int TotalDims) {
 } // namespace
 
 mx::array nonOverlappingSlidingWindows(const mx::array &X,
-                                       const std::vector<int> &Shape,
+                                       const MlxShape &Shape,
                                        const std::vector<int> &WindowShape) {
-  std::vector<int> NewShape;
+  MlxShape NewShape;
   NewShape.push_back(Shape[0]);
   for (size_t I = 1; I < std::min(Shape.size(), WindowShape.size() + 1); I++) {
     int S = Shape[I];
@@ -66,7 +67,7 @@ mx::array slidingWindows(const mx::array &X,
         std::to_string(X.ndim()) + " dimensions.");
     assumingUnreachable();
   }
-  std::vector<int> Shape = X.shape();
+  auto Shape = X.shape();
   size_t SpatialDimsCount = Shape.size() - 2;
   if (SpatialDimsCount != WindowShape.size() ||
       WindowShape.size() != WindowStrides.size()) {
@@ -92,7 +93,7 @@ mx::array slidingWindows(const mx::array &X,
   for (int I = N - 2; I >= 0; I--) {
     BaseStrides[I] = Shape[I + 1] * BaseStrides[I + 1];
   }
-  std::vector<int> FinalShape;
+  MlxShape FinalShape;
   FinalShape.push_back(Shape[0]);
   for (size_t I = 0; I < SpatialDimsCount; I++) {
     int OutDim = (Shape[I + 1] - WindowShape[I]) / WindowStrides[I] + 1;
@@ -100,7 +101,7 @@ mx::array slidingWindows(const mx::array &X,
   }
   FinalShape.insert(FinalShape.end(), WindowShape.begin(), WindowShape.end());
   FinalShape.push_back(Shape.back());
-  std::vector<int64_t> FinalStrides;
+  MlxStrides FinalStrides;
   FinalStrides.push_back(BaseStrides[0]);
   for (size_t I = 1; I < BaseStrides.size() - 1; I++) {
     FinalStrides.push_back(BaseStrides[I] * WindowStrides[I - 1]);

@@ -1,4 +1,5 @@
 #include "whisper_transcribe.h"
+#include "../mlx/mlx_compat.h"
 #include "base.h"
 #include "spdlog/spdlog.h"
 #include "whisper/tokenizer.h"
@@ -84,9 +85,9 @@ mx::array padOrTrim(const mx::array &Array, int Length, int Axis) {
   int ActualAxis = Axis < 0 ? Shape.size() + Axis : Axis;
 
   if (Shape[ActualAxis] > Length) {
-    std::vector<int> Start(Shape.size(), 0);
-    std::vector<int> End = Shape;
-    std::vector<int> Strides(Shape.size(), 1);
+    MlxShape Start(Shape.size(), 0);
+    auto End = Shape;
+    MlxShape Strides(Shape.size(), 1);
     End[ActualAxis] = Length;
     return mx::slice(Array, Start, End, Strides);
   }
@@ -103,9 +104,9 @@ mx::array padOrTrim(const mx::array &Array, int Length, int Axis) {
 mx::array hanningWindow(int Size) {
   mx::array N = mx::arange(Size + 1);
   mx::array Window = 0.5f * (1.0f - mx::cos(2.0f * M_PI * N / Size));
-  std::vector<int> Start = {0};
-  std::vector<int> End = {-1};
-  std::vector<int> Strides = {1};
+  MlxShape Start = {0};
+  MlxShape End = {-1};
+  MlxShape Strides = {1};
   return mx::slice(Window, Start, End, Strides);
 }
 
@@ -122,9 +123,9 @@ mx::array stft(const mx::array &X, const mx::array &Window, int NPerseg = 256,
     }
     if (PadMode == "reflect") {
       // x[1:padding+1][::-1]
-      std::vector<int> Start(X.shape().size(), 0);
-      std::vector<int> End = X.shape();
-      std::vector<int> Strides(X.shape().size(), 1);
+      MlxShape Start(X.shape().size(), 0);
+      auto End = X.shape();
+      MlxShape Strides(X.shape().size(), 1);
 
       Start[0] = 1;
       End[0] = Padding + 1;
@@ -141,9 +142,9 @@ mx::array stft(const mx::array &X, const mx::array &Window, int NPerseg = 256,
   // Pad the signal
   int Padding = NPerseg / 2;
   auto Padded = Pad(X, Padding, PadMode);
-  std::vector<int64_t> Strides = {static_cast<int64_t>(NOverlap), 1};
+  MlxStrides Strides = {static_cast<int64_t>(NOverlap), 1};
   int T = (Padded.shape(0) - NPerseg + NOverlap) / NOverlap;
-  auto Shape = std::vector<int>{T, NfFt};
+  MlxShape Shape = {T, NfFt};
   auto StridedX = mx::as_strided(Padded, Shape, Strides, 0);
 
   return mx::fft::rfft(StridedX * Window);
@@ -171,10 +172,10 @@ mx::array logMelSpectrogram(const mx::array &Audio, int NMels, int Padding) {
   auto Freqs = stft(PaddedAudio, Window, DefaultNFft, DefaultHopLength,
                     DefaultNFft, "reflect");
   // freqs[:-1, :].abs().square()
-  std::vector<int> Start = {0, 0};
-  std::vector<int> End = {static_cast<int>(Freqs.shape(0) - 1),
+  MlxShape Start = {0, 0};
+  MlxShape End = {static_cast<int>(Freqs.shape(0) - 1),
                           static_cast<int>(Freqs.shape(1))};
-  std::vector<int> Strides = {1, 1};
+  MlxShape Strides = {1, 1};
   auto FreqsSliced = mx::slice(Freqs, Start, End, Strides);
   auto Magnitudes = mx::square(mx::abs(FreqsSliced));
   // Apply mel filters
@@ -518,8 +519,8 @@ transcribe(const std::variant<std::string, mx::array> &Audio,
           std::min({DefaultNFrames, ContentFrames - Seek, SeekClipEnd - Seek});
 
       // Extract mel segment
-      std::vector<int> Start(Mel.shape().size(), 0);
-      std::vector<int> End = Mel.shape();
+      MlxShape Start(Mel.shape().size(), 0);
+      auto End = Mel.shape();
       Start[0] = Seek;
       End[0] = Seek + SegmentSize;
       auto MelSegment = mx::slice(Mel, Start, End);

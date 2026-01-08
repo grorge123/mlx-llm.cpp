@@ -1,4 +1,5 @@
 #include "vlm_base.h"
+#include "../mlx/mlx_compat.h"
 #include "base.h"
 #include "spdlog/spdlog.h"
 #include "vlm_sampling.h"
@@ -60,14 +61,14 @@ std::tuple<mx::array, mx::array> KVCache::fetch() const {
 
 void KVCache::update(const mx::array &NewKeys, const mx::array &NewValues) {
   int Prev = Offset;
-  std::vector<int> NewShape = NewKeys.shape();
+  auto NewShape = NewKeys.shape();
   int NewLen = NewShape[2];
 
   if (Keys.size() == 0 || (Prev + NewLen) > Keys.shape()[2]) {
     int NSteps = (Step + NewLen - 1) / Step;
     int NewCapacity = NSteps * Step;
-    std::vector<int> KShape = {1, NKVHeads, NewCapacity, KHeadDim};
-    std::vector<int> VShape = {1, NKVHeads, NewCapacity, VHeadDim};
+    MlxShape KShape = {1, NKVHeads, NewCapacity, KHeadDim};
+    MlxShape VShape = {1, NKVHeads, NewCapacity, VHeadDim};
     mx::array NewK = mx::zeros(KShape, NewKeys.dtype());
     mx::array NewV = mx::zeros(VShape, NewValues.dtype());
     if (Keys.size() != 0) {
@@ -88,8 +89,8 @@ void KVCache::update(const mx::array &NewKeys, const mx::array &NewValues) {
   // self.keys[..., prev : self.offset, :] = keys
   // self.values[..., prev : self.offset, :] = values
   auto End = NewKeys.shape();
-  std::vector<int> Start(End.size(), 0);
-  std::vector<int> Stride(End.size(), 1);
+  MlxShape Start(End.size(), 0);
+  MlxShape Stride(End.size(), 1);
   Start[End.size() - 2] = Prev;
   End[End.size() - 2] = Offset;
   Keys = mx::slice_update(Keys, NewKeys, Start, End, Stride);
@@ -195,7 +196,7 @@ std::tuple<mx::array, mx::array>
 RotatingKVCache::updateInPlace(const mx::array &NewKeys,
                                const mx::array &NewValues) {
   // May not have hit the max size yet, so potentially keep growing the cache
-  std::vector<int> KeysShape = NewKeys.shape();
+  auto KeysShape = NewKeys.shape();
   int B = KeysShape[0];
   int NKVHeads = KeysShape[1];
   int S = KeysShape[2];
@@ -206,8 +207,8 @@ RotatingKVCache::updateInPlace(const mx::array &NewKeys,
   if (Keys.size() == 0 ||
       (Prev >= Keys.shape()[2] && Keys.shape()[2] < MaxSize)) {
     int NewSize = std::min(Step, MaxSize - Prev);
-    std::vector<int> KShape = {B, NKVHeads, NewSize, KHeadDim};
-    std::vector<int> VShape = {B, NKVHeads, NewSize, VHeadDim};
+    MlxShape KShape = {B, NKVHeads, NewSize, KHeadDim};
+    MlxShape VShape = {B, NKVHeads, NewSize, VHeadDim};
 
     mx::array NewK = mx::zeros(KShape, NewKeys.dtype());
     mx::array NewV = mx::zeros(VShape, NewValues.dtype());
@@ -236,10 +237,10 @@ RotatingKVCache::updateInPlace(const mx::array &NewKeys,
   }
 
   // Assign
-  std::vector<int> KeysEnd = Keys.shape();
-  std::vector<int> Start(KeysEnd.size(), 0);
-  std::vector<int> ValuesEnd = Values.shape();
-  std::vector<int> Stride(KeysEnd.size(), 1);
+  auto KeysEnd = Keys.shape();
+  MlxShape Start(KeysEnd.size(), 0);
+  auto ValuesEnd = Values.shape();
+  MlxShape Stride(KeysEnd.size(), 1);
   Start[Start.size() - 2] = Idx;
   KeysEnd[KeysEnd.size() - 2] = Idx + S;
   ValuesEnd[KeysEnd.size() - 2] = Idx + S;
@@ -435,7 +436,7 @@ std::vector<int> Module::generate(
   }
 
   auto Step = [&](mx::array Y) -> std::tuple<mx::array, mx::array> {
-    std::vector<int> NewShape = Y.shape();
+    auto NewShape = Y.shape();
     NewShape.insert(NewShape.begin(), 1);
     // TODO: handle decoder_input_ids
     auto Outputs = std::dynamic_pointer_cast<vlm::LanguageModel>(

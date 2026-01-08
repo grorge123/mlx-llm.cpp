@@ -1,4 +1,5 @@
 #include "whisper.h"
+#include "../../mlx/mlx_compat.h"
 #include "activations.h"
 #include "base.h"
 #include "convolution.h"
@@ -300,9 +301,9 @@ TextDecoder::forward(
       KvCache->at(0).first->first.shape(1) > 0) {
     Offset = KvCache->at(0).first->first.shape(1);
   }
-  std::vector<int> Start(Parameters.at("positional_embedding").shape().size(),
+  MlxShape Start(Parameters.at("positional_embedding").shape().size(),
                          0);
-  std::vector<int> End = Parameters.at("positional_embedding").shape();
+  auto End = Parameters.at("positional_embedding").shape();
   Start[0] = Offset;
   End[0] = Offset + X.shape(-1);
 

@@ -1,4 +1,5 @@
 #include "decoding.h"
+#include "../../mlx/mlx_compat.h"
 #include "base.h"
 #include "tokenizer.h"
 #include "whisper.h"
@@ -630,8 +631,8 @@ DecodingTask::detectLanguage(const mx::array &AudioFeatures,
     LangProbs = Probabilities;
 
     if (!Options.Language) {
-      std::vector<int> Start = {0, SotIndex + 1};
-      std::vector<int> End = {Tokens.shape()[0], SotIndex + 2};
+      MlxShape Start = {0, SotIndex + 1};
+      MlxShape End = {Tokens.shape()[0], SotIndex + 2};
 
       Tokens = slice_update(Tokens, DetectedLanguageTokens, Start, End);
     }
@@ -737,7 +738,7 @@ std::vector<DecodingResult> DecodingTask::run(const mx::array &Mel) {
 
     // tokens = mx.broadcast_to(tokens, [n_audio, self.n_group,
     // len(self.initial_tokens)])
-    std::vector<int> NewShape = {NAudio, NGroup,
+    MlxShape NewShape = {NAudio, NGroup,
                                  static_cast<int>(InitialTokens.size())};
     Tokens = mx::broadcast_to(Tokens, NewShape);
 
@@ -770,8 +771,8 @@ std::vector<DecodingResult> DecodingTask::run(const mx::array &Mel) {
       Decoder->finalize(TokensResult, SumLogprobs);
 
   // tokens[..., self.sample_begin:]
-  std::vector<int> SliceStart(FinalizedTokens.ndim(), 0);
-  std::vector<int> SliceEnd = FinalizedTokens.shape();
+  MlxShape SliceStart(FinalizedTokens.ndim(), 0);
+  auto SliceEnd = FinalizedTokens.shape();
   SliceStart[FinalizedTokens.ndim() - 1] = SampleBegin;
   FinalizedTokens = mx::slice(FinalizedTokens, SliceStart, SliceEnd);
 

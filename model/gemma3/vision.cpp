@@ -1,4 +1,5 @@
 #include "vision.h"
+#include "../../mlx/mlx_compat.h"
 #include "activations.h"
 #include "convolution.h"
 #include "embedding.h"
@@ -99,10 +100,8 @@ mx::array VisionAttention::forward(const mx::array &X,
   Keys = transpose(reshape(Keys, {B, S, NumHeads, -1}), {0, 2, 1, 3});
   Values = transpose(reshape(Values, {B, S, NumHeads, -1}), {0, 2, 1, 3});
   mx::array Output =
-      Mask.has_value() ? mx::fast::scaled_dot_product_attention(
-                             Queries, Keys, Values, Scale, Mask.value())
-                       : mx::fast::scaled_dot_product_attention(Queries, Keys,
-                                                                Values, Scale);
+      mlx_compat::scaled_dot_product_attention(Queries, Keys, Values, Scale,
+                                               Mask);
   Output = reshape(transpose(Output, {0, 2, 1, 3}), {B, L, -1});
   return std::dynamic_pointer_cast<nn::Linear>(Submodules["out_proj"])
       ->forward(Output);

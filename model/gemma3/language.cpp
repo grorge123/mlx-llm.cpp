@@ -1,4 +1,5 @@
 #include "language.h"
+#include "../../mlx/mlx_compat.h"
 #include "activations.h"
 #include "base.h"
 #include "embedding.h"
@@ -137,16 +138,14 @@ mx::array Attention::forward(
     mx::array M =
         take(Mask.value(), {-Keys.shape().at(Keys.shape().size() - 2)}, -1);
     return std::dynamic_pointer_cast<nn::Linear>(Submodules["o_proj"])
-        ->forward(transpose(reshape(mx::fast::scaled_dot_product_attention(
-                                        Queries, Keys, Values, Scale, M),
-                                    {B, L, -1}),
-                            {0, 2, 1}));
+        ->forward(transpose(
+            reshape(mlx_compat::scaled_dot_product_attention(Queries, Keys,
+                                                             Values, Scale, M),
+                    {B, L, -1}),
+            {0, 2, 1}));
   }
-  auto Output = (Mask.has_value()
-                     ? mx::fast::scaled_dot_product_attention(
-                           Queries, Keys, Values, Scale, Mask.value())
-                     : mx::fast::scaled_dot_product_attention(Queries, Keys,
-                                                              Values, Scale));
+  auto Output = mlx_compat::scaled_dot_product_attention(Queries, Keys, Values,
+                                                         Scale, Mask);
   Output = reshape(transpose(Output, {0, 2, 1, 3}), {B, L, -1});
   return std::dynamic_pointer_cast<nn::Linear>(Submodules["o_proj"])
       ->forward(Output);
