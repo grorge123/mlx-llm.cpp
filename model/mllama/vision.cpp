@@ -1,4 +1,5 @@
 #include "vision.h"
+#include "../../mlx/mlx_compat.h"
 #include "activations.h"
 #include <cmath>
 #include <mlx/array.h>
@@ -149,11 +150,8 @@ MllamaVisionAttention::forward(const mx::array &HiddenState,
     mx::array Indices = mx::arange(Key.shape()[Key.size() - 3]);
     MaskOpt = take(MaskOpt.value(), Indices, -2);
   }
-  mx::array AttnOutput =
-      MaskOpt.has_value()
-          ? mx::fast::scaled_dot_product_attention(Query, Key, Value, Scale,
-                                                   MaskOpt.value())
-          : mx::fast::scaled_dot_product_attention(Query, Key, Value, Scale);
+  mx::array AttnOutput = mlx_compat::scaled_dot_product_attention(
+      Query, Key, Value, Scale, MaskOpt);
   AttnOutput = reshape(transpose(AttnOutput, {0, 2, 1, 3}),
                        {BatchSize, QSeqLen, EmbedDim});
   return std::dynamic_pointer_cast<nn::Linear>(Submodules["o_proj"])
@@ -306,8 +304,8 @@ mx::array _prepareAspectRatioAttentionMask(const mx::array &AspectRatioMask,
   int PadPatches = TargetLength - NumPatches;
   // attention_mask[:, :, -pad_patches:] = 0
   auto End = Mask.shape();
-  std::vector<int> Start(End.size(), 0);
-  std::vector<int> Stride(End.size(), 1);
+  MlxShape Start(End.size(), 0);
+  MlxShape Stride(End.size(), 1);
   Start[2] = Mask.size() - PadPatches;
   Mask = mlx::core::slice_update(
       Mask, mx::zeros({Mask.shape()[0], Mask.shape()[1], PadPatches}), Start,
@@ -318,7 +316,7 @@ mx::array _prepareAspectRatioAttentionMask(const mx::array &AspectRatioMask,
   float MinValue = -1e9f;
   mx::array MaskT = transpose(Mask, {0, 2, 1});
   mx::array AttnMask = mlx::core::matmul(Mask, MaskT) * MinValue;
-  std::vector<int> ReshapeDim = AttnMask.shape();
+  auto ReshapeDim = AttnMask.shape();
   ReshapeDim.insert(ReshapeDim.begin() + 1, 1);
   // attention_mask = attention_mask[:, None, :, :]
   AttnMask = reshape(AttnMask, ReshapeDim);

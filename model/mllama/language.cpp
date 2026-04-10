@@ -1,4 +1,5 @@
 #include "language.h"
+#include "../../mlx/mlx_compat.h"
 #include "embedding.h"
 #include "linear.h"
 #include <algorithm>
@@ -144,13 +145,8 @@ mx::array MllamaTextCrossAttention::forward(
     KeyStates = std::dynamic_pointer_cast<nn::RMSNorm>(Submodules["k_norm"])
                     ->forward(KeyStates);
   }
-  mx::array AttnOutput =
-      AttentionMask.has_value()
-          ? mx::fast::scaled_dot_product_attention(QueryStates, KeyStates,
-                                                   ValueStates, Scale,
-                                                   AttentionMask.value())
-          : mx::fast::scaled_dot_product_attention(QueryStates, KeyStates,
-                                                   ValueStates, Scale);
+  mx::array AttnOutput = mlx_compat::scaled_dot_product_attention(
+      QueryStates, KeyStates, ValueStates, Scale, AttentionMask);
 
   AttnOutput = reshape(transpose(AttnOutput, {0, 2, 1, 3}),
                        {BatchSize, QLen, HiddenSize});
@@ -218,12 +214,8 @@ MllamaTextSelfAttention::forward(const mx::array &X,
                     ->forward(KeyStates);
   }
 
-  mx::array AttnOutput =
-      Mask.has_value()
-          ? mx::fast::scaled_dot_product_attention(
-                QueryStates, KeyStates, ValueStates, Scale, Mask.value())
-          : mx::fast::scaled_dot_product_attention(QueryStates, KeyStates,
-                                                   ValueStates, Scale);
+  mx::array AttnOutput = mlx_compat::scaled_dot_product_attention(
+      QueryStates, KeyStates, ValueStates, Scale, Mask);
   AttnOutput = reshape(transpose(AttnOutput, {0, 2, 1, 3}),
                        {BatchSize, QLen, HiddenSize});
   return std::dynamic_pointer_cast<nn::Linear>(Submodules["o_proj"])

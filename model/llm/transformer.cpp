@@ -1,4 +1,5 @@
-#include "../mlx/transformer.h"
+#include "../../mlx/transformer.h"
+#include "../../mlx/mlx_compat.h"
 #include "../utils.h"
 #include "base.h"
 #include "embedding.h"
@@ -56,10 +57,8 @@ Attention::forward(mx::array Input, std::optional<mx::array> Mask,
         std::dynamic_pointer_cast<nn::RoPE>(Submodules["rope"])->forward(Keys);
   }
   mx::array Output =
-      Mask.has_value() ? mx::fast::scaled_dot_product_attention(
-                             Queries, Keys, Values, Scale, Mask.value())
-                       : mx::fast::scaled_dot_product_attention(Queries, Keys,
-                                                                Values, Scale);
+      mlx_compat::scaled_dot_product_attention(Queries, Keys, Values, Scale,
+                                               Mask);
 
   Output = reshape(transpose(Output, {0, 2, 1, 3}), {B, L, -1});
   return {std::dynamic_pointer_cast<nn::Linear>(Submodules["o_proj"])
@@ -179,7 +178,7 @@ std::tuple<mx::array,
            std::optional<std::vector<std::tuple<mx::array, mx::array>>>>
 Transformer::stepGenerate(mx::array Input, std::optional<float> Temp) {
   // Reshape Input to input[:, None]
-  std::vector<int> ReshapeDim = Input.shape();
+  auto ReshapeDim = Input.shape();
   ReshapeDim.insert(ReshapeDim.begin(), 1);
   auto [Logits, KVCache] = forward(reshape(Input, ReshapeDim));
   const int H = Logits.shape()[1] - 1;
@@ -202,7 +201,7 @@ Transformer::nextStepGenerate(
     mx::array Y, std::optional<float> Temp,
     std::optional<std::vector<std::tuple<mx::array, mx::array>>> KVCachePar) {
   // Reshape Y to y[:, None]
-  std::vector<int> ReshapeDim = Y.shape();
+  auto ReshapeDim = Y.shape();
   ReshapeDim.insert(ReshapeDim.begin() + 1, 1);
   auto [Logits, KVCache] = forward(reshape(Y, ReshapeDim), KVCachePar);
   Logits = squeeze(Logits, 1);

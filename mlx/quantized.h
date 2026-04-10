@@ -2,6 +2,7 @@
 #include "base.h"
 #include "embedding.h"
 #include "linear.h"
+#include "mlx_compat.h"
 #include <mlx/array.h>
 #include <mlx/ops.h>
 
@@ -21,9 +22,9 @@ public:
     registerParameter("weight",
                       mx::random::normal({NumEmbeddings, Dims}, 0.0, Scale));
     auto Quantized = mx::quantize(Parameters.at("weight"), GroupSize, Bits);
-    Parameters.insert_or_assign("weight", std::get<0>(Quantized));
-    registerParameter("scales", std::move(std::get<1>(Quantized)));
-    registerParameter("biases", std::move(std::get<2>(Quantized)));
+    Parameters.insert_or_assign("weight", MLX_QUANTIZE_WEIGHTS(Quantized));
+    registerParameter("scales", std::move(MLX_QUANTIZE_SCALES(Quantized)));
+    registerParameter("biases", std::move(MLX_QUANTIZE_BIASES(Quantized)));
   }
   mx::array forward(mx::array Input) override;
   static std::shared_ptr<QuantizedEmbedding>
@@ -42,9 +43,9 @@ public:
     registerParameter(
         "weight", mx::random::uniform(-Scale, Scale, {OutputDim, InputDims}));
     auto Quantized = mx::quantize(Parameters.at("weight"), GroupSize, Bits);
-    Parameters.insert_or_assign("weight", std::get<0>(Quantized));
-    registerParameter("scales", std::move(std::get<1>(Quantized)));
-    registerParameter("biases", std::move(std::get<2>(Quantized)));
+    Parameters.insert_or_assign("weight", MLX_QUANTIZE_WEIGHTS(Quantized));
+    registerParameter("scales", std::move(MLX_QUANTIZE_SCALES(Quantized)));
+    registerParameter("biases", std::move(MLX_QUANTIZE_BIASES(Quantized)));
     if (Bias) {
       registerParameter("bias", mx::zeros({OutputDim}));
     }

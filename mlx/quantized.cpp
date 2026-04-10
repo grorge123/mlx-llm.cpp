@@ -30,11 +30,12 @@ QuantizedEmbedding::fromEmbedding(std::shared_ptr<Embedding> EmbeddingModule,
       EmbeddingShape[0], EmbeddingShape[1], GroupSize, Bits));
   auto Quantized =
       mx::quantize(EmbeddingModule->Parameters.at("weight"), GroupSize, Bits);
-  QuantizedModel->Parameters.insert_or_assign("weight", std::get<0>(Quantized));
+  QuantizedModel->Parameters.insert_or_assign("weight",
+                                              MLX_QUANTIZE_WEIGHTS(Quantized));
   QuantizedModel->Parameters.insert_or_assign(
-      "scales", std::move(std::get<1>(Quantized)));
+      "scales", std::move(MLX_QUANTIZE_SCALES(Quantized)));
   QuantizedModel->Parameters.insert_or_assign(
-      "biases", std::move(std::get<2>(Quantized)));
+      "biases", std::move(MLX_QUANTIZE_BIASES(Quantized)));
   return QuantizedModel;
 }
 std::shared_ptr<QuantizedLinear>
@@ -49,11 +50,12 @@ QuantizedLinear::fromLinear(std::shared_ptr<Linear> LinearModule, int GroupSize,
       QuantizedLinear(InputDims, OutputDims, EnableBias, GroupSize, Bits));
   auto Quantized =
       mx::quantize(LinearModule->Parameters.at("weight"), GroupSize, Bits);
-  QuantizedModel->Parameters.insert_or_assign("weight", std::get<0>(Quantized));
+  QuantizedModel->Parameters.insert_or_assign("weight",
+                                              MLX_QUANTIZE_WEIGHTS(Quantized));
   QuantizedModel->Parameters.insert_or_assign(
-      "scales", std::move(std::get<1>(Quantized)));
+      "scales", std::move(MLX_QUANTIZE_SCALES(Quantized)));
   QuantizedModel->Parameters.insert_or_assign(
-      "biases", std::move(std::get<2>(Quantized)));
+      "biases", std::move(MLX_QUANTIZE_BIASES(Quantized)));
   if (EnableBias) {
     QuantizedModel->Parameters.insert_or_assign(
         "bias", LinearModule->Parameters.at("bias"));
