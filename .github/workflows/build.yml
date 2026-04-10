@@ -1,0 +1,94 @@
+name: Build
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+env:
+  BUILD_TYPE: Release
+  CMAKE_POLICY_VERSION_MINIMUM: 3.5
+  MLX_REF: v0.31.1
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Ubuntu
+            os: ubuntu-24.04
+            cc: clang
+            cxx: clang++
+            mlx_args: -DMLX_BUILD_CPU=ON -DMLX_BUILD_METAL=OFF -DMLX_BUILD_CUDA=OFF
+          - name: macOS
+            os: macos-14
+            cc: clang
+            cxx: clang++
+            mlx_args: -DMLX_BUILD_CPU=ON -DMLX_BUILD_METAL=ON -DMLX_BUILD_CUDA=OFF
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Ubuntu dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang \
+            cmake \
+            libblas-dev \
+            liblapack-dev \
+            liblapacke-dev \
+            ninja-build \
+            zlib1g-dev
+
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      - name: Check out MLX
+        run: |
+          git clone --depth 1 --branch "$MLX_REF" https://github.com/ml-explore/mlx.git "$RUNNER_TEMP/mlx"
+
+      - name: Build and install MLX
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
+        run: |
+          cmake -S "$RUNNER_TEMP/mlx" -B "$RUNNER_TEMP/mlx-build" -G Ninja \
+            -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+            -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/mlx-install" \
+            -DMLX_BUILD_BENCHMARKS=OFF \
+            -DMLX_BUILD_EXAMPLES=OFF \
+            -DMLX_BUILD_PYTHON_BINDINGS=OFF \
+            -DMLX_BUILD_TESTS=OFF \
+            ${{ matrix.mlx_args }}
+          cmake --build "$RUNNER_TEMP/mlx-build" --parallel
+          cmake --install "$RUNNER_TEMP/mlx-build"
+
+      - name: Configure project
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+            -DCMAKE_POLICY_VERSION_MINIMUM="$CMAKE_POLICY_VERSION_MINIMUM" \
+            -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/mlx-install"
+
+      - name: Build project
+        run: cmake --build build --parallel
