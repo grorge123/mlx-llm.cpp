@@ -28,8 +28,8 @@ public:
   }
   mx::array forward(mx::array Input) override;
   static std::shared_ptr<QuantizedEmbedding>
-  fromEmbedding(std::shared_ptr<Embedding> EmbeddingModule, int GroupSize = 64,
-                int Bits = 4);
+  fromEmbedding(const std::shared_ptr<Embedding> &EmbeddingModule,
+                int GroupSize = 64, int Bits = 4);
 };
 
 class QuantizedLinear : public Linear {
@@ -52,7 +52,7 @@ public:
   }
   mx::array forward(mx::array Input) override;
   static std::shared_ptr<QuantizedLinear>
-  fromLinear(std::shared_ptr<Linear> LinearModule, int GroupSize = 64,
+  fromLinear(const std::shared_ptr<Linear> &LinearModule, int GroupSize = 64,
              int Bits = 4);
 };
 

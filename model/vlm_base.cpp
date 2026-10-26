@@ -319,7 +319,7 @@ mx::array createAdditiveCausalMask(int N, int Offset) {
 }
 
 std::optional<mx::array> createAttentionMask(
-    mx::array H,
+    const mx::array &H,
     std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> Cache) {
   int T = H.shape()[1];
   std::optional<mx::array> Mask = std::nullopt;

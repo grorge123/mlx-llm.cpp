@@ -107,7 +107,7 @@ mx::array MllamaTextCrossAttention::forward(
     const mx::array &HiddenStates,
     const std::optional<mx::array> &CrossAttentionStates,
     const std::optional<mx::array> &AttentionMask,
-    std::shared_ptr<vlm::BaseCache> Cache) {
+    const std::shared_ptr<vlm::BaseCache> &Cache) {
   auto Shape = HiddenStates.shape();
   int BatchSize = Shape[0];
   int QLen = Shape[1];
@@ -179,7 +179,7 @@ MllamaTextSelfAttention::MllamaTextSelfAttention(const TextConfig &Config,
 mx::array
 MllamaTextSelfAttention::forward(const mx::array &X,
                                  const std::optional<mx::array> &Mask,
-                                 std::shared_ptr<vlm::BaseCache> Cache) {
+                                 const std::shared_ptr<vlm::BaseCache> &Cache) {
   auto Shape = X.shape();
   int BatchSize = Shape[0];
   int QLen = Shape[1];
@@ -260,7 +260,7 @@ MllamaSelfAttentionDecoderLayer::MllamaSelfAttentionDecoderLayer(
 
 mx::array MllamaSelfAttentionDecoderLayer::forward(
     const mx::array &HiddenStates, const std::optional<mx::array> &Mask,
-    std::shared_ptr<vlm::BaseCache> Cache) {
+    const std::shared_ptr<vlm::BaseCache> &Cache) {
   mx::array Residual = HiddenStates;
   mx::array Normed =
       std::dynamic_pointer_cast<nn::RMSNorm>(Submodules["input_layernorm"])
@@ -298,7 +298,7 @@ mx::array MllamaCrossAttentionDecoderLayer::forward(
     const mx::array &HiddenStates, const mx::array &CrossAttentionStates,
     const std::optional<mx::array> &AttentionMask,
     const std::optional<mx::array> &FullTextRowMaskedOutMask,
-    std::shared_ptr<vlm::BaseCache> Cache) {
+    const std::shared_ptr<vlm::BaseCache> &Cache) {
   mx::array Residual = HiddenStates;
   mx::array Normed =
       std::dynamic_pointer_cast<nn::RMSNorm>(Submodules["input_layernorm"])

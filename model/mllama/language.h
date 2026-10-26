@@ -45,7 +45,7 @@ public:
   forward(const mx::array &HiddenStates,
           const std::optional<mx::array> &CrossAttentionStates = std::nullopt,
           const std::optional<mx::array> &AttentionMask = std::nullopt,
-          std::shared_ptr<vlm::BaseCache> Cache = nullptr);
+          const std::shared_ptr<vlm::BaseCache> &Cache = nullptr);
 
 private:
   TextConfig Config;
@@ -65,7 +65,7 @@ public:
 
   mx::array forward(const mx::array &X,
                     const std::optional<mx::array> &Mask = std::nullopt,
-                    std::shared_ptr<vlm::BaseCache> Cache = nullptr);
+                    const std::shared_ptr<vlm::BaseCache> &Cache = nullptr);
 
 private:
   TextConfig Config;
@@ -93,7 +93,7 @@ public:
 
   mx::array forward(const mx::array &HiddenStates,
                     const std::optional<mx::array> &Mask = std::nullopt,
-                    std::shared_ptr<vlm::BaseCache> Cache = nullptr);
+                    const std::shared_ptr<vlm::BaseCache> &Cache = nullptr);
 
 private:
   int HiddenSize;
@@ -108,7 +108,7 @@ public:
       const mx::array &HiddenStates, const mx::array &CrossAttentionStates,
       const std::optional<mx::array> &AttentionMask = std::nullopt,
       const std::optional<mx::array> &FullTextRowMaskedOutMask = std::nullopt,
-      std::shared_ptr<vlm::BaseCache> Cache = nullptr);
+      const std::shared_ptr<vlm::BaseCache> &Cache = nullptr);
 
 private:
   int HiddenSize;

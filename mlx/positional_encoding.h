@@ -14,7 +14,7 @@ public:
   RoPE(int Dims, bool Traditional = false, float Base = 10000,
        float Scale = 1.0)
       : Dims(Dims), Tranditional(Traditional), Base(Base), Scale(Scale) {}
-  mx::array forward(mx::array Input, int Offset = 0);
+  mx::array forward(const mx::array &Input, int Offset = 0);
 };
 
 } // namespace mlx::core::nn

@@ -10,7 +10,7 @@ public:
   RMSNorm(int Dims, float Eps = 1e-5) : Eps(Eps) {
     registerParameter("weight", mx::ones({Dims}));
   }
-  mx::array forward(mx::array Input);
+  mx::array forward(const mx::array &Input);
 };
 
 class LayerNorm : public nn::Module {
@@ -27,7 +27,7 @@ public:
       }
     }
   }
-  mx::array forward(mx::array Input);
+  mx::array forward(const mx::array &Input);
 };
 
 } // namespace mlx::core::nn

@@ -16,12 +16,12 @@
 
 namespace llm {
 
-mx::array RMSNorm::forward(mx::array Input) {
+mx::array RMSNorm::forward(const mx::array &Input) {
   return mx::fast::rms_norm(Input, 1.0 + Parameters.at("weight"), Eps);
 }
 
 std::tuple<mx::array, std::tuple<mx::array, mx::array>>
-Attention::forward(mx::array Input, std::optional<mx::array> Mask,
+Attention::forward(const mx::array &Input, std::optional<mx::array> Mask,
                    std::optional<std::tuple<mx::array, mx::array>> KVCache) {
   const auto &[B, L, D] =
       std::tie(Input.shape()[0], Input.shape()[1], Input.shape()[2]);
@@ -66,7 +66,7 @@ Attention::forward(mx::array Input, std::optional<mx::array> Mask,
           {Keys, Values}};
 }
 
-mx::array MLP::forward(mx::array Input) {
+mx::array MLP::forward(const mx::array &Input) {
   if (Gemma) {
     return std::dynamic_pointer_cast<nn::Linear>(Submodules["down_proj"])
         ->forward(
@@ -85,7 +85,7 @@ mx::array MLP::forward(mx::array Input) {
 
 std::tuple<mx::array, std::tuple<mx::array, mx::array>>
 TransformerBlock::forward(
-    mx::array Input, std::optional<mx::array> Mask,
+    const mx::array &Input, std::optional<mx::array> Mask,
     std::optional<std::tuple<mx::array, mx::array>> KVCachePar) {
   mx::array NormOutput({});
   if (!Gemma) {
@@ -176,7 +176,7 @@ Transformer::forward(
 
 std::tuple<mx::array,
            std::optional<std::vector<std::tuple<mx::array, mx::array>>>>
-Transformer::stepGenerate(mx::array Input, std::optional<float> Temp) {
+Transformer::stepGenerate(const mx::array &Input, std::optional<float> Temp) {
   // Reshape Input to input[:, None]
   auto ReshapeDim = Input.shape();
   ReshapeDim.insert(ReshapeDim.begin(), 1);
@@ -198,7 +198,7 @@ Transformer::stepGenerate(mx::array Input, std::optional<float> Temp) {
 std::tuple<mx::array,
            std::optional<std::vector<std::tuple<mx::array, mx::array>>>>
 Transformer::nextStepGenerate(
-    mx::array Y, std::optional<float> Temp,
+    const mx::array &Y, std::optional<float> Temp,
     std::optional<std::vector<std::tuple<mx::array, mx::array>>> KVCachePar) {
   // Reshape Y to y[:, None]
   auto ReshapeDim = Y.shape();
@@ -220,7 +220,7 @@ enum AnserSataus {
   GO,
 };
 
-AnserSataus answerSataus(std::string Text, std::string End) {
+AnserSataus answerSataus(const std::string &Text, const std::string &End) {
   if (endsWith(Text, End)) {
     return STOP;
   }

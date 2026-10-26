@@ -77,7 +77,7 @@ std::optional<float> getEnd(const std::vector<TranscribeSegment> &Segments);
 
 // Decoding functions
 DecodingResult
-decodeWithFallback(std::shared_ptr<whisper::Whisper> Model,
+decodeWithFallback(const std::shared_ptr<whisper::Whisper> &Model,
                    const mx::array &MelSegment,
                    const DecodingOptions &DecodeOptions,
                    const std::vector<float> &Temperatures,
@@ -88,7 +88,7 @@ decodeWithFallback(std::shared_ptr<whisper::Whisper> Model,
 
 // Word-level timestamp functions
 void addWordTimestamps(std::vector<TranscribeSegment> &Segments,
-                       std::shared_ptr<whisper::Whisper> Model,
+                       const std::shared_ptr<whisper::Whisper> &Model,
                        std::unique_ptr<whisper::Tokenizer> &Tokenizer,
                        const mx::array &Mel, int NumFrames,
                        const std::string &PrependPunctuations,
@@ -104,7 +104,7 @@ nextWordsSegment(const std::vector<TranscribeSegment> &Segments);
 // Main transcribe function
 TranscribeResult
 transcribe(const std::variant<std::string, mx::array> &Audio,
-           std::shared_ptr<whisper::Whisper> Model,
+           const std::shared_ptr<whisper::Whisper> &Model,
            std::optional<bool> Verbose = std::nullopt,
            std::variant<float, std::vector<float>> Temperature =
                std::vector<float>{0.0f, 0.2f, 0.4f, 0.6f, 0.8f, 1.0f},
