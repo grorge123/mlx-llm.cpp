@@ -6,8 +6,14 @@
 #include <memory>
 #include <mlx/io.h>
 #include <optional>
+#include <spawn.h>
 #include <string>
+#include <sys/wait.h>
 #include <variant>
+#include <vector>
+
+extern char **environ;
+
 int main() {
   // std::string ModelPath = "../../Llama-3.2-11B-Vision-Instruct-4bit/";
   // auto Model = mllama::Model::fromPretrained(ModelPath, {64, 4});
@@ -32,9 +38,19 @@ int main() {
   mx::array TokenArr =
       mx::array(TokenList.data(), {static_cast<int>(TokenList.size())});
   mx::save("output.npy", TokenArr);
-  std::system((std::string("python3.10 ../example/decode.py ") + ModelPath +
-               " output.npy")
-                  .c_str());
+  // Run the detokenizer without a shell so ModelPath is passed verbatim.
+  std::string Python = "python3.10";
+  std::string Script = "../example/decode.py";
+  std::string Output = "output.npy";
+  std::vector<char *> Argv = {Python.data(), Script.data(), ModelPath.data(),
+                              Output.data(), nullptr};
+  pid_t Pid;
+  if (posix_spawnp(&Pid, Argv[0], nullptr, nullptr, Argv.data(), environ) ==
+      0) {
+    waitpid(Pid, nullptr, 0);
+  } else {
+    spdlog::error("Failed to run {}", Script);
+  }
   const auto End{std::chrono::steady_clock::now()};
   const std::chrono::duration<double> ElapsedSeconds{End - Start};
   spdlog::info("Elapsed time: {} s. TPS: {}.", ElapsedSeconds.count(),

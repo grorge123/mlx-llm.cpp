@@ -1,8 +1,10 @@
 #include "base.h"
 #include "../model/utils.h"
 #include "spdlog/spdlog.h"
+#include <cstdint>
 #include <memory>
 #include <mlx/array.h>
+#include <mlx/ops.h>
 #include <unordered_map>
 
 namespace mlx::core::nn {
@@ -76,29 +78,17 @@ Module::getWeigts(const std::string &Prefix) {
 
 } // namespace mlx::core::nn
 
+// 64-bit FNV-1a over the array's row-major bytes.
 uint64_t fnv1aHash(const mx::array &X) {
-  std::string FileName = "./temp_array.npy";
-  mx::save(FileName.c_str(), X);
-  std::string Command = "python3.10 ../hash_script.py " + FileName;
-
-  FILE *Pipe = popen(Command.c_str(), "r");
-  if (!Pipe) {
-    throw std::runtime_error("Failed to open pipe for Python script.");
+  mx::array Contiguous = mx::contiguous(X);
+  Contiguous.eval();
+  const auto *Bytes = Contiguous.data<uint8_t>();
+  uint64_t Hash = 14695981039346656037ULL;
+  for (size_t I = 0; I < Contiguous.nbytes(); ++I) {
+    Hash ^= Bytes[I];
+    Hash *= 1099511628211ULL;
   }
-
-  char Buffer[128];
-  std::string Result;
-  while (fgets(Buffer, sizeof(Buffer), Pipe) != nullptr) {
-    Result += Buffer;
-  }
-  pclose(Pipe);
-
-  try {
-    uint64_t HashVal = std::stoull(Result);
-    return HashVal;
-  } catch (const std::exception &e) {
-    throw std::runtime_error("Failed to parse hash value from Python output.");
-  }
+  return Hash;
 }
 
 void debugArray(const mx::array &X, const std::string &Name) {
