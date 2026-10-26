@@ -13,7 +13,7 @@ public:
                       mx::random::normal({NumEmbeddings, Dims}, 0.0, Scale));
   }
   virtual mx::array forward(mx::array Input);
-  mx::array asLinear(mx::array Input);
+  mx::array asLinear(const mx::array &Input);
   std::shared_ptr<nn::Module>
   toQuantized(int GroupSize = 64, int Bits = 4, const std::string &Prefix = "",
               const std::unordered_map<std::string, mx::array> &Parameters = {})

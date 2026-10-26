@@ -22,9 +22,9 @@ mx::array QuantizedLinear::forward(mx::array Input) {
   }
   return Out;
 }
-std::shared_ptr<QuantizedEmbedding>
-QuantizedEmbedding::fromEmbedding(std::shared_ptr<Embedding> EmbeddingModule,
-                                  int GroupSize, int Bits) {
+std::shared_ptr<QuantizedEmbedding> QuantizedEmbedding::fromEmbedding(
+    const std::shared_ptr<Embedding> &EmbeddingModule, int GroupSize,
+    int Bits) {
   auto EmbeddingShape = EmbeddingModule->Parameters.at("weight").shape();
   auto QuantizedModel = std::make_shared<QuantizedEmbedding>(QuantizedEmbedding(
       EmbeddingShape[0], EmbeddingShape[1], GroupSize, Bits));
@@ -39,8 +39,8 @@ QuantizedEmbedding::fromEmbedding(std::shared_ptr<Embedding> EmbeddingModule,
   return QuantizedModel;
 }
 std::shared_ptr<QuantizedLinear>
-QuantizedLinear::fromLinear(std::shared_ptr<Linear> LinearModule, int GroupSize,
-                            int Bits) {
+QuantizedLinear::fromLinear(const std::shared_ptr<Linear> &LinearModule,
+                            int GroupSize, int Bits) {
   auto LinearShape = LinearModule->Parameters.at("weight").shape();
   auto OutputDims = LinearShape[0];
   auto InputDims = LinearShape[1];

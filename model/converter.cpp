@@ -6,7 +6,7 @@
 #include <vector>
 
 std::unordered_map<std::string, mx::array>
-weightsToMlx(std::string WeightPath) {
+weightsToMlx(const std::string &WeightPath) {
   const std::filesystem::path Path(WeightPath);
   if (std::filesystem::is_directory(Path)) {
     std::unordered_map<std::string, mx::array> Loaded;
@@ -33,7 +33,7 @@ weightsToMlx(std::string WeightPath) {
 }
 
 std::unordered_map<std::string, mx::array>
-llamaToMlxllm(std::string WeightPath) {
+llamaToMlxllm(const std::string &WeightPath) {
   std::unordered_map<std::string, mx::array> ModelWeights;
   auto Weight = weightsToMlx(WeightPath);
   for (auto &[K, V] : Weight) {

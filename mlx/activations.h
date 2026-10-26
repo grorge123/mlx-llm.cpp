@@ -3,7 +3,7 @@
 #include <cmath>
 #include <mlx/array.h>
 namespace mlx::core {
-mx::array gelu(mx::array X);
-mx::array silu(mx::array X);
-mx::array geluApprox(mx::array X);
+mx::array gelu(const mx::array &X);
+mx::array silu(const mx::array &X);
+mx::array geluApprox(const mx::array &X);
 } // namespace mlx::core

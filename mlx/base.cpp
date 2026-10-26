@@ -9,7 +9,7 @@
 
 namespace mlx::core::nn {
 
-mx::array &Module::registerParameter(std::string Name, mx::array &&W) {
+mx::array &Module::registerParameter(const std::string &Name, mx::array &&W) {
   Parameters.insert({Name, W});
   return Parameters.at(Name);
 }
@@ -40,7 +40,7 @@ std::shared_ptr<nn::Module> Module::toQuantized(
   }
   return shared_from_this();
 }
-void Module::apply(std::string Key, mx::array Value) {
+void Module::apply(std::string Key, const mx::array &Value) {
   std::vector<std::string> SplitKey = splitString(Key, '.');
   if (SplitKey.size() == 1) {
     if (Parameters.find(Key) == Parameters.end()) {

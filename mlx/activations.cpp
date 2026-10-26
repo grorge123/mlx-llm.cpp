@@ -2,7 +2,7 @@
 #include "math.h"
 #include <mlx/ops.h>
 namespace mlx::core {
-mx::array gelu(mx::array X) {
+mx::array gelu(const mx::array &X) {
   // auto Result = X * (1 + mx::erf(X / std::sqrt(2))) / 2;
   auto Result = X *
                 (mx::array({1}, X.dtype()) +
@@ -10,8 +10,8 @@ mx::array gelu(mx::array X) {
                 mx::array({2}, X.dtype());
   return Result;
 }
-mx::array silu(mx::array X) { return X * mx::sigmoid(X); }
-mx::array geluApprox(mx::array X) {
+mx::array silu(const mx::array &X) { return X * mx::sigmoid(X); }
+mx::array geluApprox(const mx::array &X) {
   return mx::array({0.5}, X.dtype()) * X *
          (mx::array({1}, X.dtype()) +
           mx::tanh(mx::array({std::sqrt(2.0 / M_PI)}, X.dtype()) *

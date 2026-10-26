@@ -7,7 +7,7 @@
 
 namespace mlx::core::nn {
 
-mx::array Conv1d::forward(mx::array Input) {
+mx::array Conv1d::forward(const mx::array &Input) {
   auto Y = mx::conv1d(Input, Parameters.at("weight"), Stride, Padding, Dilation,
                       Groups);
   if (Parameters.find("bias") != Parameters.end()) {
@@ -16,7 +16,7 @@ mx::array Conv1d::forward(mx::array Input) {
   return Y;
 }
 
-mx::array Conv2d::forward(mx::array Input) {
+mx::array Conv2d::forward(const mx::array &Input) {
   auto Y = mx::conv2d(Input, Parameters.at("weight"), Stride, Padding, Dilation,
                       Groups);
   if (Parameters.find("bias") != Parameters.end()) {

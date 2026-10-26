@@ -16,7 +16,7 @@ public:
   std::string Name;
   std::unordered_map<std::string, mx::array> Parameters{};
   std::unordered_map<std::string, std::shared_ptr<Module>> Submodules{};
-  mx::array &registerParameter(std::string Name, mx::array &&W);
+  mx::array &registerParameter(const std::string &Name, mx::array &&W);
   std::unordered_map<std::string, mx::array>
   getWeigts(const std::string &Prefix = "model");
   virtual std::shared_ptr<nn::Module> toQuantized(
@@ -24,9 +24,10 @@ public:
       const std::unordered_map<std::string, mx::array> &Parameters = {});
   virtual bool hasQuantize() { return false; }
   void update(std::unordered_map<std::string, mx::array> Parameters);
-  void apply(std::string Key, mx::array Parameters);
+  void apply(std::string Key, const mx::array &Parameters);
   template <typename T>
-  void registerModule(std::string ModuleName, std::shared_ptr<T> M) {
+  void registerModule(const std::string &ModuleName,
+                      const std::shared_ptr<T> &M) {
     using DecayedT = std::decay_t<T>;
     if (!std::is_base_of<Module, DecayedT>::value) {
       spdlog::error("Invalid subModule.");
@@ -42,7 +43,7 @@ public:
     }
   }
   template <typename T>
-  void registerLayer(std::string ModuleName,
+  void registerLayer(const std::string &ModuleName,
                      std::vector<std::shared_ptr<T>> &Layers) {
     if (!std::is_base_of<Module, T>::value) {
       spdlog::error("Invalid subModule.");

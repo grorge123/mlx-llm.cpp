@@ -26,7 +26,7 @@ public:
   RMSNorm(int Dims, float Eps = 1e-5) : Eps(Eps) {
     registerParameter("weight", mx::ones({Dims}));
   }
-  mx::array forward(mx::array Input);
+  mx::array forward(const mx::array &Input);
 };
 class Attention : public nn::Module {
 
@@ -77,7 +77,7 @@ public:
                                                        RopeTheta, RopeScale)));
   }
   std::tuple<mx::array, std::tuple<mx::array, mx::array>>
-  forward(mx::array Input, std::optional<mx::array> Mask = {},
+  forward(const mx::array &Input, std::optional<mx::array> Mask = {},
           std::optional<std::tuple<mx::array, mx::array>> KVCache = {});
 };
 class MLP : public nn::Module {
@@ -92,7 +92,7 @@ public:
     registerModule("up_proj", std::make_shared<nn::Linear>(
                                   nn::Linear(Dim, HiddenDim, false)));
   }
-  mx::array forward(mx::array Input);
+  mx::array forward(const mx::array &Input);
 };
 class TransformerBlock : public nn::Module {
   bool Gemma;
@@ -124,7 +124,7 @@ public:
     }
   }
   std::tuple<mx::array, std::tuple<mx::array, mx::array>>
-  forward(mx::array Input, std::optional<mx::array> Mask = {},
+  forward(const mx::array &Input, std::optional<mx::array> Mask = {},
           std::optional<std::tuple<mx::array, mx::array>> KVCachePar = {});
 };
 class Transformer : public nn::Module {
@@ -215,10 +215,10 @@ public:
               KVCachePar = {});
   std::tuple<mx::array,
              std::optional<std::vector<std::tuple<mx::array, mx::array>>>>
-  stepGenerate(mx::array Input, std::optional<float> Temp = 0.0);
+  stepGenerate(const mx::array &Input, std::optional<float> Temp = 0.0);
   std::tuple<mx::array,
              std::optional<std::vector<std::tuple<mx::array, mx::array>>>>
-  nextStepGenerate(mx::array Y, std::optional<float> Temp = 0.0,
+  nextStepGenerate(const mx::array &Y, std::optional<float> Temp = 0.0,
                    std::optional<std::vector<std::tuple<mx::array, mx::array>>>
                        KVCachePar = {});
   LLMOutput generate(const std::string &Prompt, const BasePrompt &ModelPrompt,

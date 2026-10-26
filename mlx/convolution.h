@@ -21,7 +21,7 @@ public:
       registerParameter("bias", mx::zeros({OutChannels}));
     }
   }
-  mx::array forward(mx::array Input);
+  mx::array forward(const mx::array &Input);
 };
 
 class Conv2d : public nn::Module {
@@ -50,7 +50,7 @@ public:
       registerParameter("bias", mx::zeros({OutChannels}));
     }
   }
-  mx::array forward(mx::array Input);
+  mx::array forward(const mx::array &Input);
 };
 
 } // namespace mlx::core::nn

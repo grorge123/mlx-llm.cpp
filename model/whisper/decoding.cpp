@@ -33,7 +33,7 @@ float compressionRatio(const std::string &Text) {
 
 // Language detection implementation
 std::pair<mx::array, std::vector<std::map<std::string, float>>>
-detectLanguage(std::shared_ptr<Whisper> Model, const mx::array &Mel,
+detectLanguage(const std::shared_ptr<Whisper> &Model, const mx::array &Mel,
                std::shared_ptr<Tokenizer> Tokenizer) {
 
   if (!Tokenizer) {
@@ -175,8 +175,9 @@ GreedyDecoder::finalize(const mx::array &Tokens, const mx::array &SumLogprobs) {
 }
 
 // SuppressBlank implementation
-SuppressBlank::SuppressBlank(std::shared_ptr<whisper::Tokenizer> Tokenizer,
-                             int SampleBegin, int NVocab)
+SuppressBlank::SuppressBlank(
+    const std::shared_ptr<whisper::Tokenizer> &Tokenizer, int SampleBegin,
+    int NVocab)
     : SampleBegin(SampleBegin), Mask(mx::zeros({NVocab}, mx::float32)) {
   Name = "SuppressBlank";
   std::vector<float> MaskVec(NVocab, 0.0f);
@@ -401,7 +402,7 @@ std::vector<int> MaximumLikelihoodRanker::rank(
 }
 
 // DecodingTask implementation - Constructor and helper methods
-DecodingTask::DecodingTask(std::shared_ptr<Whisper> Model,
+DecodingTask::DecodingTask(const std::shared_ptr<Whisper> &Model,
                            const DecodingOptions &Options)
     : Model(Model), Options(verifyOptions(Options)) {
 
@@ -860,7 +861,7 @@ std::vector<DecodingResult> DecodingTask::run(const mx::array &Mel) {
 
 // Main decode function
 std::variant<DecodingResult, std::vector<DecodingResult>>
-decode(std::shared_ptr<Whisper> Model, const mx::array &Mel,
+decode(const std::shared_ptr<Whisper> &Model, const mx::array &Mel,
        const DecodingOptions &Options) {
   auto MelArray = Mel;
   if (Mel.ndim() == 2) {

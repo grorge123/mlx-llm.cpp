@@ -17,7 +17,7 @@ class Whisper;
 float compressionRatio(const std::string &Text);
 
 std::pair<mx::array, std::vector<std::map<std::string, float>>>
-detectLanguage(std::shared_ptr<Whisper> Model, const mx::array &Mel,
+detectLanguage(const std::shared_ptr<Whisper> &Model, const mx::array &Mel,
                std::shared_ptr<Tokenizer> Tokenizer = nullptr);
 
 struct DecodingOptions {
@@ -123,7 +123,7 @@ public:
 
 class SuppressBlank : public LogitFilter {
 public:
-  SuppressBlank(std::shared_ptr<Tokenizer> Tokenizer, int SampleBegin,
+  SuppressBlank(const std::shared_ptr<Tokenizer> &Tokenizer, int SampleBegin,
                 int NVocab);
   mx::array apply(const mx::array &Logits, const mx::array &Tokens) override;
 
@@ -155,7 +155,8 @@ private:
 
 class DecodingTask {
 public:
-  DecodingTask(std::shared_ptr<Whisper> Model, const DecodingOptions &Options);
+  DecodingTask(const std::shared_ptr<Whisper> &Model,
+               const DecodingOptions &Options);
   std::vector<DecodingResult> run(const mx::array &Mel);
 
 private:
@@ -185,7 +186,7 @@ private:
 };
 
 std::variant<DecodingResult, std::vector<DecodingResult>>
-decode(std::shared_ptr<Whisper> Model, const mx::array &Mel,
+decode(const std::shared_ptr<Whisper> &Model, const mx::array &Mel,
        const DecodingOptions &Options = DecodingOptions());
 
 } // namespace whisper
