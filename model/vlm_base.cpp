@@ -3,6 +3,7 @@
 #include "base.h"
 #include "spdlog/spdlog.h"
 #include "vlm_sampling.h"
+#include <algorithm>
 #include <ctime>
 #include <memory>
 #include <mlx/array.h>
@@ -126,8 +127,8 @@ int KVCache::trim(int N) {
 }
 
 // RotatingKVCache implementation
-RotatingKVCache::RotatingKVCache(int MaxSize, int Keep, int Step)
-    : KVCache(0, 0, Step), Keep(Keep), MaxSize(MaxSize), Idx(0) {}
+RotatingKVCache::RotatingKVCache(int MaxSize, int Keep, int StepSize)
+    : KVCache(0, 0, StepSize), Keep(Keep), MaxSize(MaxSize), Idx(0) {}
 
 mx::array RotatingKVCache::trim(int TrimSize, const mx::array &V,
                                 std::optional<mx::array> Append) {
@@ -480,6 +481,7 @@ std::vector<int> Module::generate(
   GenerationResult LastResponse;
   auto Tic = std::chrono::system_clock::now().time_since_epoch();
   std::vector<int32_t> TokenList;
+  const std::vector<int> EosTokenIds = eosTokenIds();
   int N = 0;
   while (true) {
     int PromptTPS;
@@ -487,7 +489,6 @@ std::vector<int> Module::generate(
       PromptTPS = std::chrono::duration_cast<std::chrono::seconds>(Tic).count();
       Tic = std::chrono::system_clock::now().time_since_epoch();
     }
-    // TODO: if token = eos_token_id break
     auto Response = GenerationResult();
     N++;
     if (N >= MaxTokens) {
@@ -497,6 +498,10 @@ std::vector<int> Module::generate(
     mx::async_eval(NextY);
     // TODO: handle decoder_input_ids
     auto Token = Y.item<int>();
+    if (std::find(EosTokenIds.begin(), EosTokenIds.end(), Token) !=
+        EosTokenIds.end()) {
+      break;
+    }
     TokenList.emplace_back(Token);
     Y = NextY;
     LogProbs = NextLogProbs;

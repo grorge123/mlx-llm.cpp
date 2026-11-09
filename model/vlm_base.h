@@ -62,7 +62,7 @@ public:
   int MaxSize;
   int Idx;
 
-  RotatingKVCache(int MaxSize = -1, int Keep = 0, int Step = 256);
+  RotatingKVCache(int MaxSize = -1, int Keep = 0, int StepSize = 256);
 
   std::tuple<mx::array, mx::array>
   updateAndFetch(const mx::array &NewKeys, const mx::array &NewValues) override;
@@ -93,6 +93,9 @@ public:
       const mx::array &Mask,
       const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache =
           std::nullopt) = 0;
+  // Token ids that end generation. Models override this with their EOS /
+  // end-of-turn ids; the default never stops early.
+  virtual std::vector<int> eosTokenIds() const { return {}; }
   struct GenerationResult {
     std::string Text;
     int Token;

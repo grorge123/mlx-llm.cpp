@@ -5,9 +5,11 @@
 #include "whisper/tokenizer.h"
 #include <algorithm>
 #include <cassert>
+#include <cerrno>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <iomanip>
 #include <iostream>
 #include <memory>
@@ -15,54 +17,84 @@
 #include <mlx/fft.h>
 #include <mlx/ops.h>
 #include <mlx/transforms.h>
+#include <spawn.h>
 #include <sstream>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <vector>
 #include <zlib.h>
+
+extern char **environ;
 
 namespace whisper {
 
 mx::array loadAudio(const std::string &FilePath, int SampleRate) {
+  // Decode with ffmpeg via posix_spawnp and an argv array. Never build a
+  // command string for popen()/system(): /bin/sh would interpret shell
+  // metacharacters in FilePath (e.g. "a.wav; rm -rf ~"), allowing command
+  // injection, and paths containing spaces would break.
   int Channels = 1;
-  std::vector<std::string> Cmd = {"ffmpeg",   "-nostdin",
-                                  "-threads", "0",
-                                  "-i",       FilePath,
-                                  "-f",       "s16le",
-                                  "-ac",      std::to_string(Channels),
-                                  "-acodec",  "pcm_s16le",
-                                  "-ar",      std::to_string(SampleRate),
-                                  "-v",       "quiet",
-                                  "-"};
-
-  // Build command string
-  std::stringstream CmdStream;
-  for (size_t i = 0; i < Cmd.size(); ++i) {
-    if (i > 0)
-      CmdStream << " ";
-    CmdStream << Cmd[i];
+  std::vector<std::string> Args = {"ffmpeg",   "-nostdin",
+                                   "-threads", "0",
+                                   "-i",       FilePath,
+                                   "-f",       "s16le",
+                                   "-ac",      std::to_string(Channels),
+                                   "-acodec",  "pcm_s16le",
+                                   "-ar",      std::to_string(SampleRate),
+                                   "-v",       "quiet",
+                                   "-"};
+  std::vector<char *> Argv;
+  Argv.reserve(Args.size() + 1);
+  for (auto &Arg : Args) {
+    Argv.push_back(Arg.data());
   }
-  std::string CmdString = CmdStream.str();
+  Argv.push_back(nullptr);
 
-  // Execute ffmpeg command
-  FILE *Pipe = popen(CmdString.c_str(), "r");
-  if (!Pipe) {
-    throw std::runtime_error("Failed to execute ffmpeg command");
+  int PipeFds[2];
+  if (pipe(PipeFds) != 0) {
+    throw std::runtime_error("Failed to create pipe for ffmpeg");
+  }
+  posix_spawn_file_actions_t Actions;
+  posix_spawn_file_actions_init(&Actions);
+  posix_spawn_file_actions_adddup2(&Actions, PipeFds[1], STDOUT_FILENO);
+  posix_spawn_file_actions_addclose(&Actions, PipeFds[0]);
+  posix_spawn_file_actions_addclose(&Actions, PipeFds[1]);
+
+  pid_t Pid;
+  int SpawnErr =
+      posix_spawnp(&Pid, Argv[0], &Actions, nullptr, Argv.data(), environ);
+  posix_spawn_file_actions_destroy(&Actions);
+  close(PipeFds[1]);
+  if (SpawnErr != 0) {
+    close(PipeFds[0]);
+    throw std::runtime_error("Failed to execute ffmpeg: " +
+                             std::string(std::strerror(SpawnErr)));
   }
 
-  // Read raw audio data
+  // Read raw little-endian int16 PCM from ffmpeg's stdout.
   std::vector<int16_t> AudioData;
-  int16_t Buffer[4096];
-  size_t BytesRead;
+  std::vector<char> Bytes;
+  char Buffer[8192];
+  while (true) {
+    ssize_t N = read(PipeFds[0], Buffer, sizeof(Buffer));
+    if (N > 0) {
+      Bytes.insert(Bytes.end(), Buffer, Buffer + N);
+    } else if (N == 0 || errno != EINTR) {
+      break;
+    }
+  }
+  close(PipeFds[0]);
 
-  while ((BytesRead = fread(Buffer, sizeof(int16_t), 4096, Pipe)) > 0) {
-    AudioData.insert(AudioData.end(), Buffer, Buffer + BytesRead);
+  int Status = 0;
+  while (waitpid(Pid, &Status, 0) < 0 && errno == EINTR) {
+  }
+  if (!WIFEXITED(Status) || WEXITSTATUS(Status) != 0) {
+    throw std::runtime_error("ffmpeg failed to decode audio file: " + FilePath);
   }
 
-  int ExitCode = pclose(Pipe);
-  if (ExitCode != 0) {
-    throw std::runtime_error("ffmpeg command failed with exit code: " +
-                             std::to_string(ExitCode));
-  }
-
+  AudioData.resize(Bytes.size() / sizeof(int16_t));
+  std::memcpy(AudioData.data(), Bytes.data(),
+              AudioData.size() * sizeof(int16_t));
   if (AudioData.empty()) {
     throw std::runtime_error("No audio data loaded from file: " + FilePath);
   }
@@ -75,9 +107,7 @@ mx::array loadAudio(const std::string &FilePath, int SampleRate) {
     AudioArray = mx::reshape(AudioArray, {Frames, Channels});
   }
 
-  mx::array FloatAudio = mx::astype(AudioArray, mx::float32) / 32768.0f;
-
-  return FloatAudio;
+  return mx::astype(AudioArray, mx::float32) / 32768.0f;
 }
 
 mx::array padOrTrim(const mx::array &Array, int Length, int Axis) {
@@ -153,8 +183,7 @@ mx::array stft(const mx::array &X, const mx::array &Window, int NPerseg = 256,
 mx::array melFilters(int NMels) {
   // Load precomputed mel filters from file
   if (NMels != 80 && NMels != 128) {
-    spdlog::error("Unsupported number of mel filters: " +
-                  std::to_string(NMels));
+    spdlog::error("Unsupported number of mel filters: {}", NMels);
     assumingUnreachable();
   }
   std::string FileName = "assets/mel_filters_" + std::to_string(NMels) + ".npy";
@@ -174,7 +203,7 @@ mx::array logMelSpectrogram(const mx::array &Audio, int NMels, int Padding) {
   // freqs[:-1, :].abs().square()
   MlxShape Start = {0, 0};
   MlxShape End = {static_cast<int>(Freqs.shape(0) - 1),
-                          static_cast<int>(Freqs.shape(1))};
+                  static_cast<int>(Freqs.shape(1))};
   MlxShape Strides = {1, 1};
   auto FreqsSliced = mx::slice(Freqs, Start, End, Strides);
   auto Magnitudes = mx::square(mx::abs(FreqsSliced));

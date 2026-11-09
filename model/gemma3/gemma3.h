@@ -51,6 +51,8 @@ public:
       const mx::array &Mask,
       const std::optional<std::vector<std::shared_ptr<vlm::BaseCache>>> &Cache =
           std::nullopt) override;
+  // <eos> and <end_of_turn>.
+  std::vector<int> eosTokenIds() const override { return {1, 106}; }
   static std::shared_ptr<Model> fromPretrained(const std::string &ModelPath);
   std::unordered_map<std::string, mx::array>
   sanitize(const std::unordered_map<std::string, mx::array> &Weights);

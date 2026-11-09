@@ -53,8 +53,8 @@ void saveWeights(const mx::array &Weights, const std::string &Path) {
 std::string loadBytesFromFile(const std::string &Path) {
   std::ifstream Fs(Path, std::ios::in | std::ios::binary);
   if (Fs.fail()) {
-    std::cerr << "Cannot open " << Path << std::endl;
-    exit(1);
+    spdlog::error("Cannot open {}.", Path);
+    return "";
   }
   std::string Data;
   Fs.seekg(0, std::ios::end);

@@ -190,8 +190,8 @@ Encoding::Encoding(const std::string &Name, int ExplicitNVocab,
                    const std::string &PatStr,
                    const std::unordered_map<std::string, int> &MergeableRanks,
                    const std::unordered_map<std::string, int> &SpecialTokens)
-    : Name(Name), PatStr(PatStr),
-      MergeableRanks(MergeableRanks), SpecialTokens(SpecialTokens) {
+    : Name(Name), PatStr(PatStr), MergeableRanks(MergeableRanks),
+      SpecialTokens(SpecialTokens) {
 
   EotToken = 50257; // Default EOT token
 
@@ -447,13 +447,14 @@ int Tokenizer::languageToken() const {
   return toLanguageToken(Language.value());
 }
 
-int Tokenizer::toLanguageToken(const std::string &Language) const {
-  std::string TokenName = "<|" + Language + "|>";
+int Tokenizer::toLanguageToken(const std::string &LanguageCode) const {
+  std::string TokenName = "<|" + LanguageCode + "|>";
   auto It = SpecialTokens.find(TokenName);
   if (It != SpecialTokens.end()) {
     return It->second;
   }
-  throw std::runtime_error("Language " + Language + " not found in tokenizer.");
+  throw std::runtime_error("Language " + LanguageCode +
+                           " not found in tokenizer.");
 }
 
 std::vector<int> Tokenizer::getAllLanguageTokens() const {
@@ -699,7 +700,7 @@ std::unique_ptr<Encoding> getEncoding(const std::string &Name,
   std::vector<std::string> Specials = {"<|endoftext|>",
                                        "<|startoftranscript|>"};
 
-  for (const auto &[Code, Name] : LANGUAGES) {
+  for (const auto &[Code, LanguageName] : LANGUAGES) {
     Specials.push_back("<|" + Code + "|>");
     if (static_cast<int>(Specials.size()) >= NumLanguages + 2)
       break;
