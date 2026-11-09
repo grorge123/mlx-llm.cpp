@@ -466,8 +466,9 @@ DecodingTask::DecodingTask(const std::shared_ptr<Whisper> &Model,
   }
 }
 
-DecodingOptions DecodingTask::verifyOptions(const DecodingOptions &Options) {
-  DecodingOptions Result = Options;
+DecodingOptions
+DecodingTask::verifyOptions(const DecodingOptions &InputOptions) {
+  DecodingOptions Result = InputOptions;
 
   // Check beam_size and best_of conflicts
   if (Result.BeamSize && Result.BestOf) {
@@ -740,7 +741,7 @@ std::vector<DecodingResult> DecodingTask::run(const mx::array &Mel) {
     // tokens = mx.broadcast_to(tokens, [n_audio, self.n_group,
     // len(self.initial_tokens)])
     MlxShape NewShape = {NAudio, NGroup,
-                                 static_cast<int>(InitialTokens.size())};
+                         static_cast<int>(InitialTokens.size())};
     Tokens = mx::broadcast_to(Tokens, NewShape);
 
     // tokens = tokens.reshape(n_audio * self.n_group, len(self.initial_tokens))
